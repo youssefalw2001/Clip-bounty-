@@ -9,6 +9,14 @@ export type Campaign = {
   status: "active" | "paused" | "completed";
   description: string;
   rules: string[];
+  isImported?: boolean;
+  sourcePlatform?: string;
+  externalPayoutPer1k?: number;
+  ourPayoutPer1k?: number;
+  geographicRestriction?: string;
+  approvalRatePct?: number;
+  budgetPctRemaining?: number;
+  niche?: string;
 };
 
 export type Clip = {
@@ -40,6 +48,12 @@ export const campaigns: Campaign[] = [
       "Include #clipbounty and the campaign code in the caption.",
       "No fake views, repost farms, or misleading claims.",
     ],
+    isImported: false,
+    sourcePlatform: "manual",
+    budgetPctRemaining: 77,
+    approvalRatePct: 95,
+    geographicRestriction: "global",
+    niche: "podcast",
   },
   {
     id: "camp_002",
@@ -57,6 +71,14 @@ export const campaigns: Campaign[] = [
       "Minimum 8 seconds, maximum 45 seconds.",
       "Payout is manually reviewed during beta.",
     ],
+    isImported: true,
+    sourcePlatform: "whop",
+    externalPayoutPer1k: 0.75,
+    ourPayoutPer1k: 0.2,
+    budgetPctRemaining: 100,
+    approvalRatePct: 91,
+    geographicRestriction: "global",
+    niche: "gaming",
   },
 ];
 
@@ -64,7 +86,7 @@ export const clips: Clip[] = [
   {
     id: "clip_001",
     campaignId: "camp_001",
-    worker: "@demo_worker",
+    worker: "beta_worker",
     platform: "YouTube",
     url: "https://youtube.com/shorts/demo",
     views: 4200,
@@ -75,9 +97,9 @@ export const clips: Clip[] = [
   {
     id: "clip_002",
     campaignId: "camp_002",
-    worker: "@clipper_asia",
+    worker: "clipper_asia",
     platform: "TikTok",
-    url: "https://tiktok.com/@demo/video/123",
+    url: "https://tiktok.com/demo/video/123",
     views: 0,
     estimatedEarnings: 0,
     status: "submitted",
