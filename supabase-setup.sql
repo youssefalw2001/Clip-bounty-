@@ -1,5 +1,5 @@
 -- ClipBounty MVP database setup
--- Run this in Supabase SQL Editor once.
+-- Run this in Supabase SQL Editor. Safe to re-run.
 
 create extension if not exists "pgcrypto";
 
@@ -46,9 +46,22 @@ create table if not exists users (
   updated_at timestamp not null default now()
 );
 
+create table if not exists campaign_sources (
+  id uuid primary key default gen_random_uuid(),
+  source_platform text not null,
+  external_campaign_id text,
+  external_url text not null unique,
+  raw_data jsonb,
+  last_fetched_at timestamp not null default now(),
+  is_active boolean not null default true
+);
+
+create index if not exists campaign_sources_platform_idx on campaign_sources(source_platform);
+
 create table if not exists campaigns (
   id uuid primary key default gen_random_uuid(),
   buyer_id uuid references users(id),
+  source_id uuid references campaign_sources(id),
   title varchar(160) not null,
   description text,
   platform platform not null,
@@ -57,6 +70,13 @@ create table if not exists campaigns (
   remaining_budget_usd numeric(12,2) not null,
   buyer_cpm_usd numeric(8,4) not null,
   worker_cpm_usd numeric(8,4) not null,
+  is_imported boolean not null default false,
+  external_payout_per_1k real,
+  our_payout_per_1k real,
+  geographic_restriction text not null default 'global',
+  approval_rate_pct integer,
+  budget_pct_remaining integer,
+  niche text default 'general',
   required_hashtags jsonb default '[]'::jsonb,
   rules jsonb default '[]'::jsonb,
   source_asset_urls jsonb default '[]'::jsonb,
@@ -68,8 +88,19 @@ create table if not exists campaigns (
   updated_at timestamp not null default now()
 );
 
+alter table campaigns add column if not exists source_id uuid references campaign_sources(id);
+alter table campaigns add column if not exists is_imported boolean not null default false;
+alter table campaigns add column if not exists external_payout_per_1k real;
+alter table campaigns add column if not exists our_payout_per_1k real;
+alter table campaigns add column if not exists geographic_restriction text not null default 'global';
+alter table campaigns add column if not exists approval_rate_pct integer;
+alter table campaigns add column if not exists budget_pct_remaining integer;
+alter table campaigns add column if not exists niche text default 'general';
+
 create index if not exists campaign_status_idx on campaigns(status);
 create index if not exists campaign_buyer_idx on campaigns(buyer_id);
+create index if not exists campaign_source_idx on campaigns(source_id);
+create index if not exists campaign_imported_idx on campaigns(is_imported);
 
 create table if not exists clips (
   id uuid primary key default gen_random_uuid(),
@@ -117,7 +148,6 @@ create table if not exists payouts (
   paid_at timestamp
 );
 
--- Seed one demo buyer and campaign so your first dashboard is not empty.
 insert into users (telegram_user_id, telegram_username, role)
 values ('demo_buyer', 'demo_buyer', 'buyer')
 on conflict (telegram_user_id) do nothing;
@@ -133,7 +163,11 @@ insert into campaigns (
   buyer_cpm_usd,
   worker_cpm_usd,
   required_hashtags,
-  rules
+  rules,
+  budget_pct_remaining,
+  approval_rate_pct,
+  geographic_restriction,
+  niche
 )
 select
   users.id,
@@ -146,7 +180,11 @@ select
   0.60,
   0.25,
   '["#clipbounty"]'::jsonb,
-  '["Use buyer approved content", "No fake views", "Submit public clip links only"]'::jsonb
+  '["Use buyer approved content", "No fake views", "Submit public clip links only"]'::jsonb,
+  100,
+  95,
+  'global',
+  'general'
 from users
 where users.telegram_user_id = 'demo_buyer'
 and not exists (
