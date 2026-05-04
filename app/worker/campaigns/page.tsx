@@ -1,5 +1,5 @@
-import { CampaignCard } from "@/components/CampaignCard";
 import { DashboardShell } from "@/components/DashboardShell";
+import { WorkerCampaignGate } from "@/components/WorkerCampaignGate";
 import { getCampaignCards } from "@/lib/queries";
 
 export const dynamic = "force-dynamic";
@@ -10,13 +10,9 @@ export default async function WorkerCampaignsPage() {
   return (
     <DashboardShell
       title="Available clip bounties"
-      subtitle="Workers can browse campaigns, follow buyer rules, post short-form clips, and submit links for review."
+      subtitle="Complete your profile once, then see campaigns matched to your social accounts and selected niches."
     >
-      <div className="grid gap-5 md:grid-cols-2">
-        {campaigns.map((campaign) => (
-          <CampaignCard key={campaign.id} campaign={campaign} />
-        ))}
-      </div>
+      <WorkerCampaignGate campaigns={campaigns} />
     </DashboardShell>
   );
 }
