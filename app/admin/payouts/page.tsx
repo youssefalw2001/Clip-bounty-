@@ -1,7 +1,8 @@
 import { DashboardShell } from "@/components/DashboardShell";
-import { clips } from "@/lib/data";
+import { getClipRows } from "@/lib/queries";
 
-export default function AdminPayoutsPage() {
+export default async function AdminPayoutsPage() {
+  const clips = await getClipRows();
   const payable = clips.filter((clip) => clip.status === "approved" || clip.status === "payable");
   const total = payable.reduce((sum, clip) => sum + clip.estimatedEarnings, 0);
 
@@ -14,8 +15,8 @@ export default function AdminPayoutsPage() {
         <p className="text-sm text-slate-400">Pending payout estimate</p>
         <p className="mt-2 text-4xl font-black text-emerald-400">${total.toFixed(2)}</p>
       </div>
-      <div className="overflow-hidden rounded-2xl border border-slate-800">
-        <table className="w-full text-left text-sm">
+      <div className="overflow-x-auto rounded-2xl border border-slate-800">
+        <table className="w-full min-w-[700px] text-left text-sm">
           <thead className="bg-slate-900 text-slate-300">
             <tr>
               <th className="p-4">Clip ID</th>
@@ -37,6 +38,11 @@ export default function AdminPayoutsPage() {
                 </td>
               </tr>
             ))}
+            {payable.length === 0 ? (
+              <tr className="border-t border-slate-800 bg-slate-950">
+                <td className="p-4 text-slate-400" colSpan={5}>No approved clips are ready for payout yet.</td>
+              </tr>
+            ) : null}
           </tbody>
         </table>
       </div>
