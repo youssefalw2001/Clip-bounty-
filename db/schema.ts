@@ -11,6 +11,7 @@ import {
   jsonb,
   uniqueIndex,
   index,
+  real,
 } from "drizzle-orm/pg-core";
 
 export const userRoleEnum = pgEnum("user_role", ["worker", "buyer", "admin"]);
@@ -34,9 +35,23 @@ export const users = pgTable("users", {
   telegramIdx: uniqueIndex("users_telegram_user_id_idx").on(table.telegramUserId),
 }));
 
+export const campaignSources = pgTable("campaign_sources", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  sourcePlatform: text("source_platform").notNull(),
+  externalCampaignId: text("external_campaign_id"),
+  externalUrl: text("external_url").notNull(),
+  rawData: jsonb("raw_data").$type<Record<string, unknown>>(),
+  lastFetchedAt: timestamp("last_fetched_at").notNull().defaultNow(),
+  isActive: boolean("is_active").notNull().default(true),
+}, (table) => ({
+  externalUrlIdx: uniqueIndex("campaign_sources_external_url_idx").on(table.externalUrl),
+  sourcePlatformIdx: index("campaign_sources_platform_idx").on(table.sourcePlatform),
+}));
+
 export const campaigns = pgTable("campaigns", {
   id: uuid("id").primaryKey().defaultRandom(),
   buyerId: uuid("buyer_id").references(() => users.id),
+  sourceId: uuid("source_id").references(() => campaignSources.id),
   title: varchar("title", { length: 160 }).notNull(),
   description: text("description"),
   platform: platformEnum("platform").notNull(),
@@ -45,6 +60,13 @@ export const campaigns = pgTable("campaigns", {
   remainingBudgetUsd: numeric("remaining_budget_usd", { precision: 12, scale: 2 }).notNull(),
   buyerCpmUsd: numeric("buyer_cpm_usd", { precision: 8, scale: 4 }).notNull(),
   workerCpmUsd: numeric("worker_cpm_usd", { precision: 8, scale: 4 }).notNull(),
+  isImported: boolean("is_imported").notNull().default(false),
+  externalPayoutPer1k: real("external_payout_per_1k"),
+  ourPayoutPer1k: real("our_payout_per_1k"),
+  geographicRestriction: text("geographic_restriction").notNull().default("global"),
+  approvalRatePct: integer("approval_rate_pct"),
+  budgetPctRemaining: integer("budget_pct_remaining"),
+  niche: text("niche").default("general"),
   requiredHashtags: jsonb("required_hashtags").$type<string[]>().default([]),
   rules: jsonb("rules").$type<string[]>().default([]),
   sourceAssetUrls: jsonb("source_asset_urls").$type<string[]>().default([]),
@@ -57,6 +79,8 @@ export const campaigns = pgTable("campaigns", {
 }, (table) => ({
   statusIdx: index("campaign_status_idx").on(table.status),
   buyerIdx: index("campaign_buyer_idx").on(table.buyerId),
+  sourceIdx: index("campaign_source_idx").on(table.sourceId),
+  importedIdx: index("campaign_imported_idx").on(table.isImported),
 }));
 
 export const clips = pgTable("clips", {
