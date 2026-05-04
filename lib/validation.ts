@@ -1,6 +1,8 @@
 import { z } from "zod";
 
 export const platformSchema = z.enum(["youtube", "tiktok", "instagram"]);
+export const sourcePlatformSchema = z.enum(["whop", "vyro", "mrktplce", "manual"]);
+export const geographicRestrictionSchema = z.enum(["global", "us_only", "eu_only"]);
 
 export const createCampaignSchema = z.object({
   title: z.string().min(3, "Title must be at least 3 characters").max(160),
@@ -12,6 +14,25 @@ export const createCampaignSchema = z.object({
   rules: z.string().max(5000).optional(),
   requiredHashtags: z.string().max(1000).optional(),
   landingUrl: z.string().url().optional().or(z.literal("")),
+});
+
+export const importCampaignSchema = z.object({
+  sourcePlatform: sourcePlatformSchema,
+  externalUrl: z.string().url("Enter the Whop, Vyro, MRKTPLCE, or manual source URL"),
+  externalCampaignId: z.string().max(200).optional(),
+  title: z.string().min(3).max(160),
+  description: z.string().max(3000).optional(),
+  rules: z.string().max(5000).optional(),
+  platform: platformSchema,
+  budgetUsd: z.coerce.number().positive(),
+  budgetPctRemaining: z.coerce.number().int().min(0).max(100),
+  externalPayoutPer1k: z.coerce.number().positive(),
+  ourPayoutPer1k: z.coerce.number().positive().optional(),
+  approvalRatePct: z.coerce.number().int().min(0).max(100),
+  geographicRestriction: geographicRestrictionSchema.default("global"),
+  niche: z.string().max(80).optional(),
+  requiredHashtags: z.string().max(1000).optional(),
+  sourceAssetUrls: z.string().max(3000).optional(),
 });
 
 export const submitClipSchema = z.object({
