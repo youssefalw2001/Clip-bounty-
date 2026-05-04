@@ -1,8 +1,10 @@
 import { CampaignCard } from "@/components/CampaignCard";
 import { DashboardShell } from "@/components/DashboardShell";
-import { campaigns } from "@/lib/data";
+import { getCampaignCards } from "@/lib/queries";
 
-export default function WorkerCampaignsPage() {
+export default async function WorkerCampaignsPage() {
+  const campaigns = await getCampaignCards();
+
   return (
     <DashboardShell
       title="Available clip bounties"
