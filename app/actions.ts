@@ -8,45 +8,43 @@ import { campaigns, clips, users } from "@/db/schema";
 import { extractYouTubeVideoId } from "@/lib/tracking";
 import { createCampaignSchema, csvToArray, linesToArray, submitClipSchema } from "@/lib/validation";
 
-async function getOrCreateDemoBuyer() {
-  const db = requireDb();
-  const telegramUserId = "demo_buyer";
-  const existing = await db.query.users.findFirst({
-    where: eq(users.telegramUserId, telegramUserId),
-  });
+type UserRole = "buyer" | "worker" | "admin";
 
-  if (existing) return existing;
+function getRequiredUserId(formData: FormData) {
+  const userId = String(formData.get("userId") || "").trim();
 
-  const [created] = await db
-    .insert(users)
-    .values({
-      telegramUserId,
-      telegramUsername: "demo_buyer",
-      role: "buyer",
-    })
-    .returning();
+  if (!userId) {
+    throw new Error("User identity is required. Open ClipBounty in Telegram or refresh the page and try again.");
+  }
 
-  return created;
+  return userId;
 }
 
-async function getOrCreateDemoWorker(walletAddress: string) {
+async function getOrCreateUser(userId: string, role: UserRole, walletAddress?: string) {
   const db = requireDb();
-  const telegramUserId = "demo_worker";
   const existing = await db.query.users.findFirst({
-    where: eq(users.telegramUserId, telegramUserId),
+    where: eq(users.telegramUserId, userId),
   });
 
   if (existing) {
-    await db.update(users).set({ tonWalletAddress: walletAddress }).where(eq(users.id, existing.id));
+    if (walletAddress && !existing.tonWalletAddress) {
+      const [updated] = await db
+        .update(users)
+        .set({ tonWalletAddress: walletAddress })
+        .where(eq(users.id, existing.id))
+        .returning();
+
+      return updated;
+    }
+
     return existing;
   }
 
   const [created] = await db
     .insert(users)
     .values({
-      telegramUserId,
-      telegramUsername: "demo_worker",
-      role: "worker",
+      telegramUserId: userId,
+      role,
       tonWalletAddress: walletAddress,
     })
     .returning();
@@ -56,6 +54,7 @@ async function getOrCreateDemoWorker(walletAddress: string) {
 
 export async function createCampaignAction(formData: FormData) {
   const db = requireDb();
+  const userId = getRequiredUserId(formData);
   const parsed = createCampaignSchema.safeParse({
     title: formData.get("title"),
     platform: formData.get("platform"),
@@ -76,7 +75,7 @@ export async function createCampaignAction(formData: FormData) {
     throw new Error("Worker CPM must be lower than buyer CPM so the platform keeps a spread.");
   }
 
-  const buyer = await getOrCreateDemoBuyer();
+  const buyer = await getOrCreateUser(userId, "buyer");
   const budget = parsed.data.budgetUsd.toFixed(2);
 
   await db.insert(campaigns).values({
@@ -101,6 +100,7 @@ export async function createCampaignAction(formData: FormData) {
 
 export async function submitClipAction(formData: FormData) {
   const db = requireDb();
+  const userId = getRequiredUserId(formData);
   const parsed = submitClipSchema.safeParse({
     campaignId: formData.get("campaignId"),
     platform: formData.get("platform"),
@@ -112,7 +112,7 @@ export async function submitClipAction(formData: FormData) {
     throw new Error(parsed.error.issues.map((issue) => issue.message).join(", "));
   }
 
-  const worker = await getOrCreateDemoWorker(parsed.data.walletAddress);
+  const worker = await getOrCreateUser(userId, "worker", parsed.data.walletAddress);
   const videoId = parsed.data.platform === "youtube" ? extractYouTubeVideoId(parsed.data.url) : null;
 
   await db.insert(clips).values({
