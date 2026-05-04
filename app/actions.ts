@@ -7,7 +7,7 @@ import { requireDb } from "@/db";
 import { campaignSources, campaigns, clips, users } from "@/db/schema";
 import { calculateWorkerPayout, inferNiche, validateImportedCampaign } from "@/lib/campaignImport";
 import { extractYouTubeVideoId } from "@/lib/tracking";
-import { createCampaignSchema, csvToArray, importCampaignSchema, linesToArray, submitClipSchema } from "@/lib/validation";
+import { createCampaignSchema, csvToArray, importCampaignSchema, linesToArray, submitClipSchema, workerProfileSchema } from "@/lib/validation";
 
 type UserRole = "buyer" | "worker" | "admin";
 
@@ -51,6 +51,67 @@ async function getOrCreateUser(userId: string, role: UserRole, walletAddress?: s
     .returning();
 
   return created;
+}
+
+export async function saveWorkerProfileAction(formData: FormData) {
+  const db = requireDb();
+  const userId = getRequiredUserId(formData);
+  const niches = formData.getAll("niches").map((niche) => String(niche));
+  const parsed = workerProfileSchema.safeParse({
+    displayName: formData.get("displayName"),
+    tonWalletAddress: formData.get("tonWalletAddress"),
+    country: formData.get("country") || "IN",
+    tiktokHandle: formData.get("tiktokHandle") || undefined,
+    tiktokFollowers: formData.get("tiktokFollowers") || 0,
+    instagramHandle: formData.get("instagramHandle") || undefined,
+    instagramFollowers: formData.get("instagramFollowers") || 0,
+    youtubeHandle: formData.get("youtubeHandle") || undefined,
+    youtubeSubscribers: formData.get("youtubeSubscribers") || 0,
+    niches,
+  });
+
+  if (!parsed.success) {
+    throw new Error(parsed.error.issues.map((issue) => issue.message).join(", "));
+  }
+
+  const hasSocialAccount = Boolean(
+    parsed.data.tiktokHandle || parsed.data.instagramHandle || parsed.data.youtubeHandle,
+  );
+
+  if (!hasSocialAccount) {
+    throw new Error("Add at least one TikTok, Instagram, or YouTube Shorts handle.");
+  }
+
+  const existing = await db.query.users.findFirst({ where: eq(users.telegramUserId, userId) });
+  const values = {
+    role: "worker" as const,
+    displayName: parsed.data.displayName,
+    country: parsed.data.country,
+    countryCode: parsed.data.country,
+    tonWalletAddress: parsed.data.tonWalletAddress,
+    tiktokHandle: parsed.data.tiktokHandle || null,
+    tiktokFollowers: parsed.data.tiktokFollowers,
+    instagramHandle: parsed.data.instagramHandle || null,
+    instagramFollowers: parsed.data.instagramFollowers,
+    youtubeHandle: parsed.data.youtubeHandle || null,
+    youtubeSubscribers: parsed.data.youtubeSubscribers,
+    niches: parsed.data.niches,
+    isProfileComplete: true,
+    updatedAt: new Date(),
+  };
+
+  if (existing) {
+    await db.update(users).set(values).where(eq(users.id, existing.id));
+  } else {
+    await db.insert(users).values({
+      telegramUserId: userId,
+      ...values,
+    });
+  }
+
+  revalidatePath("/worker/profile");
+  revalidatePath("/worker/campaigns");
+  redirect("/worker/campaigns");
 }
 
 export async function createCampaignAction(formData: FormData) {
