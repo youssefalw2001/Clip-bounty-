@@ -2,6 +2,8 @@ import { CampaignCard } from "@/components/CampaignCard";
 import { DashboardShell } from "@/components/DashboardShell";
 import { getCampaignCards } from "@/lib/queries";
 
+export const dynamic = "force-dynamic";
+
 export default async function WorkerCampaignsPage() {
   const campaigns = await getCampaignCards();
 
