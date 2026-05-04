@@ -2,9 +2,12 @@ import Link from "next/link";
 
 const navItems = [
   { href: "/", label: "Home" },
+  { href: "/admin/import", label: "Import" },
+  { href: "/worker/profile", label: "Profile" },
   { href: "/worker/campaigns", label: "Rewards" },
-  { href: "/buyer/campaigns", label: "Campaigns" },
-  { href: "/admin/clips", label: "Ops" },
+  { href: "/worker/submit", label: "Submit" },
+  { href: "/admin/clips", label: "Review" },
+  { href: "/admin/payouts", label: "Payouts" },
 ];
 
 export function DashboardShell({
@@ -31,20 +34,20 @@ export function DashboardShell({
               Clip<span className="text-emerald-300">Bounty</span>
             </span>
           </Link>
-          <div className="hidden items-center gap-2 rounded-full border border-white/10 bg-white/5 p-1 text-sm text-stone-300 md:flex">
-            {navItems.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className="rounded-full px-4 py-2 transition hover:bg-white/10 hover:text-white"
-              >
-                {item.label}
-              </Link>
-            ))}
-          </div>
-          <Link href="/buyer/campaigns/new" className="rounded-full border border-amber-300/30 bg-amber-300/10 px-4 py-2 text-xs font-bold uppercase tracking-widest text-amber-200 shadow-lg shadow-amber-950/20">
-            Invite Only
+          <Link href="/admin/import" className="rounded-full border border-amber-300/30 bg-amber-300/10 px-4 py-2 text-xs font-bold uppercase tracking-widest text-amber-200 shadow-lg shadow-amber-950/20">
+            Import
           </Link>
+        </div>
+        <div className="mx-auto mt-4 flex max-w-6xl gap-2 overflow-x-auto pb-1 text-sm text-stone-300">
+          {navItems.map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              className="shrink-0 rounded-full border border-white/10 bg-white/5 px-4 py-2 transition hover:bg-white/10 hover:text-white"
+            >
+              {item.label}
+            </Link>
+          ))}
         </div>
       </nav>
 
