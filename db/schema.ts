@@ -26,13 +26,24 @@ export const users = pgTable("users", {
   telegramUsername: varchar("telegram_username", { length: 64 }),
   role: userRoleEnum("role").notNull().default("worker"),
   countryCode: varchar("country_code", { length: 2 }),
+  country: varchar("country", { length: 2 }).notNull().default("IN"),
+  displayName: text("display_name"),
   tonWalletAddress: text("ton_wallet_address"),
+  tiktokHandle: text("tiktok_handle"),
+  tiktokFollowers: integer("tiktok_followers").notNull().default(0),
+  instagramHandle: text("instagram_handle"),
+  instagramFollowers: integer("instagram_followers").notNull().default(0),
+  youtubeHandle: text("youtube_handle"),
+  youtubeSubscribers: integer("youtube_subscribers").notNull().default(0),
+  niches: jsonb("niches").$type<string[]>().default([]),
+  isProfileComplete: boolean("is_profile_complete").notNull().default(false),
   riskScore: integer("risk_score").notNull().default(0),
   isBanned: boolean("is_banned").notNull().default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 }, (table) => ({
   telegramIdx: uniqueIndex("users_telegram_user_id_idx").on(table.telegramUserId),
+  profileCompleteIdx: index("users_profile_complete_idx").on(table.isProfileComplete),
 }));
 
 export const campaignSources = pgTable("campaign_sources", {
