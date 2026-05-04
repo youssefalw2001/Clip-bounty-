@@ -1,12 +1,14 @@
 import Link from "next/link";
 import { DashboardShell } from "@/components/DashboardShell";
-import { campaigns } from "@/lib/data";
+import { getCampaignCards } from "@/lib/queries";
 
-export default function BuyerCampaignsPage() {
+export default async function BuyerCampaignsPage() {
+  const campaigns = await getCampaignCards();
+
   return (
     <DashboardShell
       title="Buyer campaigns"
-      subtitle="Create campaigns, review remaining budget, and monitor worker submissions."
+      subtitle="Create campaigns, review remaining budget, and monitor worker submissions. Copy a campaign UUID when testing worker submissions."
     >
       <div className="mb-6">
         <Link href="/buyer/campaigns/new" className="rounded-xl bg-emerald-400 px-5 py-3 font-bold text-slate-950">
@@ -21,6 +23,7 @@ export default function BuyerCampaignsPage() {
                 <p className="text-sm text-emerald-400">{campaign.platform}</p>
                 <h2 className="mt-1 text-2xl font-bold">{campaign.title}</h2>
                 <p className="mt-2 text-slate-300">{campaign.description}</p>
+                <p className="mt-3 rounded-lg bg-slate-950 px-3 py-2 font-mono text-xs text-slate-400">Campaign UUID: {campaign.id}</p>
               </div>
               <div className="rounded-xl bg-slate-950 p-4 text-right">
                 <p className="text-sm text-slate-400">Remaining</p>
