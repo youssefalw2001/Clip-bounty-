@@ -1,5 +1,6 @@
 import { createCampaignAction } from "@/app/actions";
 import { DashboardShell } from "@/components/DashboardShell";
+import { UserIdentityInput } from "@/components/UserIdentityInput";
 
 export default function NewCampaignPage() {
   return (
@@ -8,6 +9,7 @@ export default function NewCampaignPage() {
       subtitle="Set the campaign details, buyer CPM, worker CPM, budget, rules, and platform. This now saves into Postgres."
     >
       <form action={createCampaignAction} className="max-w-3xl rounded-2xl border border-slate-800 bg-slate-900 p-6">
+        <UserIdentityInput />
         <div className="grid gap-5 md:grid-cols-2">
           <div>
             <label className="block text-sm font-semibold text-slate-200" htmlFor="title">Campaign title</label>
