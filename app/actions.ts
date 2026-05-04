@@ -3,12 +3,13 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
-import { db } from "@/db";
+import { requireDb } from "@/db";
 import { campaigns, clips, users } from "@/db/schema";
 import { extractYouTubeVideoId } from "@/lib/tracking";
 import { createCampaignSchema, csvToArray, linesToArray, submitClipSchema } from "@/lib/validation";
 
 async function getOrCreateDemoBuyer() {
+  const db = requireDb();
   const telegramUserId = "demo_buyer";
   const existing = await db.query.users.findFirst({
     where: eq(users.telegramUserId, telegramUserId),
@@ -29,6 +30,7 @@ async function getOrCreateDemoBuyer() {
 }
 
 async function getOrCreateDemoWorker(walletAddress: string) {
+  const db = requireDb();
   const telegramUserId = "demo_worker";
   const existing = await db.query.users.findFirst({
     where: eq(users.telegramUserId, telegramUserId),
@@ -53,6 +55,7 @@ async function getOrCreateDemoWorker(walletAddress: string) {
 }
 
 export async function createCampaignAction(formData: FormData) {
+  const db = requireDb();
   const parsed = createCampaignSchema.safeParse({
     title: formData.get("title"),
     platform: formData.get("platform"),
@@ -67,6 +70,10 @@ export async function createCampaignAction(formData: FormData) {
 
   if (!parsed.success) {
     throw new Error(parsed.error.issues.map((issue) => issue.message).join(", "));
+  }
+
+  if (parsed.data.workerCpmUsd >= parsed.data.buyerCpmUsd) {
+    throw new Error("Worker CPM must be lower than buyer CPM so the platform keeps a spread.");
   }
 
   const buyer = await getOrCreateDemoBuyer();
@@ -93,6 +100,7 @@ export async function createCampaignAction(formData: FormData) {
 }
 
 export async function submitClipAction(formData: FormData) {
+  const db = requireDb();
   const parsed = submitClipSchema.safeParse({
     campaignId: formData.get("campaignId"),
     platform: formData.get("platform"),
@@ -122,6 +130,7 @@ export async function submitClipAction(formData: FormData) {
 }
 
 export async function approveClipAction(formData: FormData) {
+  const db = requireDb();
   const clipId = String(formData.get("clipId") || "");
   if (!clipId) throw new Error("Clip ID is required");
 
@@ -138,6 +147,7 @@ export async function approveClipAction(formData: FormData) {
 }
 
 export async function rejectClipAction(formData: FormData) {
+  const db = requireDb();
   const clipId = String(formData.get("clipId") || "");
   if (!clipId) throw new Error("Clip ID is required");
 
