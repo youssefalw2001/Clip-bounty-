@@ -14,38 +14,45 @@ export async function getCampaignCards(): Promise<Campaign[]> {
   try {
     const rows = await db.query.campaigns.findMany({
       orderBy: [desc(campaigns.createdAt)],
-      with: {
-        source: true,
-      },
     });
 
     if (rows.length === 0) return demoCampaigns;
+
+    const sourceIds = rows.map((row) => row.sourceId).filter(Boolean) as string[];
+    const sources = sourceIds.length
+      ? await db.query.campaignSources.findMany({ where: inArray(campaignSources.id, sourceIds) })
+      : [];
+    const sourceById = new Map(sources.map((source) => [source.id, source]));
 
     return rows
       .filter((row) => row.status === "active")
       .filter((row) => row.geographicRestriction !== "us_only")
       .filter((row) => (row.budgetPctRemaining ?? 100) >= 40)
       .filter((row) => (row.approvalRatePct ?? 100) >= 80)
-      .map((row) => ({
-        id: row.id,
-        title: row.title,
-        buyer: row.isImported ? row.source?.sourcePlatform?.toUpperCase() || "Imported" : "Manual buyer",
-        platform: platformLabel(row.platform),
-        payoutPerThousandViews: Number(row.workerCpmUsd),
-        budget: Number(row.budgetUsd),
-        remainingBudget: Number(row.remainingBudgetUsd),
-        status: row.status === "draft" ? "paused" : row.status,
-        description: row.description || "No description added yet.",
-        rules: row.rules?.length ? row.rules : ["Follow buyer instructions.", "No fake views or misleading claims."],
-        isImported: row.isImported,
-        sourcePlatform: row.source?.sourcePlatform || (row.isImported ? "imported" : "manual"),
-        externalPayoutPer1k: row.externalPayoutPer1k ?? undefined,
-        ourPayoutPer1k: row.ourPayoutPer1k ?? undefined,
-        geographicRestriction: row.geographicRestriction,
-        approvalRatePct: row.approvalRatePct ?? undefined,
-        budgetPctRemaining: row.budgetPctRemaining ?? undefined,
-        niche: row.niche || "general",
-      }));
+      .map((row) => {
+        const source = row.sourceId ? sourceById.get(row.sourceId) : null;
+
+        return {
+          id: row.id,
+          title: row.title,
+          buyer: row.isImported ? source?.sourcePlatform?.toUpperCase() || "Imported" : "Manual buyer",
+          platform: platformLabel(row.platform),
+          payoutPerThousandViews: Number(row.workerCpmUsd),
+          budget: Number(row.budgetUsd),
+          remainingBudget: Number(row.remainingBudgetUsd),
+          status: row.status === "draft" ? "paused" : row.status,
+          description: row.description || "No description added yet.",
+          rules: row.rules?.length ? row.rules : ["Follow buyer instructions.", "No fake views or misleading claims."],
+          isImported: row.isImported,
+          sourcePlatform: source?.sourcePlatform || (row.isImported ? "imported" : "manual"),
+          externalPayoutPer1k: row.externalPayoutPer1k ?? undefined,
+          ourPayoutPer1k: row.ourPayoutPer1k ?? undefined,
+          geographicRestriction: row.geographicRestriction,
+          approvalRatePct: row.approvalRatePct ?? undefined,
+          budgetPctRemaining: row.budgetPctRemaining ?? undefined,
+          niche: row.niche || "general",
+        };
+      });
   } catch {
     return demoCampaigns;
   }
