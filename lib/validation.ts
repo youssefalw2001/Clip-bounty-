@@ -35,6 +35,19 @@ export const importCampaignSchema = z.object({
   sourceAssetUrls: z.string().max(3000).optional(),
 });
 
+export const workerProfileSchema = z.object({
+  displayName: z.string().min(2, "Display name is required").max(120),
+  tonWalletAddress: z.string().min(8, "TON wallet is required for payouts").max(200),
+  country: z.string().min(2).max(2).default("IN"),
+  tiktokHandle: z.string().max(120).optional(),
+  tiktokFollowers: z.coerce.number().int().min(0).default(0),
+  instagramHandle: z.string().max(120).optional(),
+  instagramFollowers: z.coerce.number().int().min(0).default(0),
+  youtubeHandle: z.string().max(120).optional(),
+  youtubeSubscribers: z.coerce.number().int().min(0).default(0),
+  niches: z.array(z.string()).min(1, "Select at least one niche"),
+});
+
 export const submitClipSchema = z.object({
   campaignId: z.string().uuid("Campaign ID must be a valid UUID"),
   platform: platformSchema,
