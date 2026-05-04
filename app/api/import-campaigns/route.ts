@@ -1,9 +1,9 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { requireDb } from "@/db";
 import { campaignSources, campaigns } from "@/db/schema";
 import { calculateWorkerPayout, inferNiche, validateImportedCampaign, type ImportedCampaignInput } from "@/lib/campaignImport";
 
-const sampleFeed: ImportedCampaignInput[] = [
+const fallbackFeed: ImportedCampaignInput[] = [
   {
     sourcePlatform: "whop",
     externalCampaignId: "sample-global-crypto",
@@ -19,22 +19,37 @@ const sampleFeed: ImportedCampaignInput[] = [
     niche: "crypto",
     requiredHashtags: ["#crypto", "#web3"],
   },
-  {
-    sourcePlatform: "vyro",
-    externalCampaignId: "sample-gaming-global",
-    externalUrl: "https://example.com/source/sample-gaming-global",
-    title: "Global Gaming Clips Campaign",
-    description: "All countries accepted. Clip gaming highlights for short-form platforms.",
-    rules: ["Any audience allowed", "No reuploads without edits", "Submit within 60 minutes"],
-    platform: "tiktok",
-    budgetUsd: 800,
-    budgetPctRemaining: 76,
-    externalPayoutPer1k: 0.75,
-    approvalRatePct: 88,
-    niche: "gaming",
-    requiredHashtags: ["#gaming", "#clips"],
-  },
 ];
+
+function isAuthorized(request: NextRequest) {
+  const secret = process.env.IMPORT_CRON_SECRET;
+  if (!secret) return true;
+
+  const headerSecret = request.headers.get("x-import-secret");
+  const querySecret = request.nextUrl.searchParams.get("secret");
+  return headerSecret === secret || querySecret === secret;
+}
+
+async function loadFeed(): Promise<ImportedCampaignInput[]> {
+  const feedUrl = process.env.CAMPAIGN_FEED_URL;
+
+  if (!feedUrl) return fallbackFeed;
+
+  const res = await fetch(feedUrl, {
+    headers: { accept: "application/json" },
+    next: { revalidate: 0 },
+  });
+
+  if (!res.ok) {
+    throw new Error(`Campaign feed returned ${res.status}`);
+  }
+
+  const data = await res.json();
+  if (Array.isArray(data)) return data as ImportedCampaignInput[];
+  if (Array.isArray(data.campaigns)) return data.campaigns as ImportedCampaignInput[];
+
+  throw new Error("Campaign feed must be an array or { campaigns: [...] }.");
+}
 
 async function importOne(item: ImportedCampaignInput) {
   const db = requireDb();
@@ -81,23 +96,41 @@ async function importOne(item: ImportedCampaignInput) {
   return { imported: true, title: item.title, sourcePlatform: item.sourcePlatform };
 }
 
-export async function POST() {
-  const results = [];
-
-  for (const item of sampleFeed) {
-    try {
-      results.push(await importOne(item));
-    } catch {
-      results.push({ imported: false, title: item.title, reason: "Already imported or insert failed" });
-    }
+export async function POST(request: NextRequest) {
+  if (!isAuthorized(request)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  return NextResponse.json({ results });
+  try {
+    const feed = await loadFeed();
+    const results = [];
+
+    for (const item of feed) {
+      try {
+        results.push(await importOne(item));
+      } catch {
+        results.push({ imported: false, title: item.title, reason: "Already imported or insert failed" });
+      }
+    }
+
+    return NextResponse.json({ importedCount: results.filter((item) => item.imported).length, results });
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Import failed" },
+      { status: 400 },
+    );
+  }
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  if (!isAuthorized(request)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   return NextResponse.json({
     status: "ready",
-    message: "POST this route from a cron job to import qualifying campaigns. Replace sampleFeed with approved source data when source access is confirmed.",
+    mode: process.env.CAMPAIGN_FEED_URL ? "external_feed" : "fallback_sample_feed",
+    feedUrlConfigured: Boolean(process.env.CAMPAIGN_FEED_URL),
+    message: "POST this route from a scheduler to automatically import qualifying campaigns from CAMPAIGN_FEED_URL.",
   });
 }
