@@ -162,3 +162,20 @@ export async function rejectClipAction(formData: FormData) {
   revalidatePath("/admin/clips");
   revalidatePath("/admin/payouts");
 }
+
+export async function markClipPaidAction(formData: FormData) {
+  const db = requireDb();
+  const clipId = String(formData.get("clipId") || "");
+  if (!clipId) throw new Error("Clip ID is required");
+
+  await db
+    .update(clips)
+    .set({
+      status: "paid",
+    })
+    .where(eq(clips.id, clipId));
+
+  revalidatePath("/admin/payouts");
+  revalidatePath("/admin/clips");
+  revalidatePath("/worker/earnings");
+}
