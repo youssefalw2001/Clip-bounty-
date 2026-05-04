@@ -38,13 +38,36 @@ create table if not exists users (
   telegram_user_id varchar(64) not null unique,
   telegram_username varchar(64),
   role user_role not null default 'worker',
-  country_code varchar(2),
+  country_code varchar(8),
+  country varchar(8) not null default 'IN',
+  display_name text,
   ton_wallet_address text,
+  tiktok_handle text,
+  tiktok_followers integer not null default 0,
+  instagram_handle text,
+  instagram_followers integer not null default 0,
+  youtube_handle text,
+  youtube_subscribers integer not null default 0,
+  niches jsonb default '[]'::jsonb,
+  is_profile_complete boolean not null default false,
   risk_score integer not null default 0,
   is_banned boolean not null default false,
   created_at timestamp not null default now(),
   updated_at timestamp not null default now()
 );
+
+alter table users add column if not exists country varchar(8) not null default 'IN';
+alter table users alter column country_code type varchar(8);
+alter table users add column if not exists display_name text;
+alter table users add column if not exists tiktok_handle text;
+alter table users add column if not exists tiktok_followers integer not null default 0;
+alter table users add column if not exists instagram_handle text;
+alter table users add column if not exists instagram_followers integer not null default 0;
+alter table users add column if not exists youtube_handle text;
+alter table users add column if not exists youtube_subscribers integer not null default 0;
+alter table users add column if not exists niches jsonb default '[]'::jsonb;
+alter table users add column if not exists is_profile_complete boolean not null default false;
+create index if not exists users_profile_complete_idx on users(is_profile_complete);
 
 create table if not exists campaign_sources (
   id uuid primary key default gen_random_uuid(),
