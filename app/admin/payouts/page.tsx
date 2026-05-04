@@ -1,3 +1,4 @@
+import { markClipPaidAction } from "@/app/actions";
 import { DashboardShell } from "@/components/DashboardShell";
 import { getClipRows } from "@/lib/queries";
 
@@ -34,7 +35,10 @@ export default async function AdminPayoutsPage() {
                 <td className="p-4">${clip.estimatedEarnings.toFixed(2)}</td>
                 <td className="p-4">manual review</td>
                 <td className="p-4">
-                  <button className="rounded-lg bg-emerald-400 px-3 py-2 text-xs font-bold text-slate-950">Mark paid</button>
+                  <form action={markClipPaidAction}>
+                    <input type="hidden" name="clipId" value={clip.id} />
+                    <button className="rounded-lg bg-emerald-400 px-3 py-2 text-xs font-bold text-slate-950">Mark paid</button>
+                  </form>
                 </td>
               </tr>
             ))}
