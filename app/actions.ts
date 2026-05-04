@@ -4,9 +4,10 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { requireDb } from "@/db";
-import { campaigns, clips, users } from "@/db/schema";
+import { campaignSources, campaigns, clips, users } from "@/db/schema";
+import { calculateWorkerPayout, inferNiche, validateImportedCampaign } from "@/lib/campaignImport";
 import { extractYouTubeVideoId } from "@/lib/tracking";
-import { createCampaignSchema, csvToArray, linesToArray, submitClipSchema } from "@/lib/validation";
+import { createCampaignSchema, csvToArray, importCampaignSchema, linesToArray, submitClipSchema } from "@/lib/validation";
 
 type UserRole = "buyer" | "worker" | "admin";
 
@@ -96,6 +97,99 @@ export async function createCampaignAction(formData: FormData) {
   revalidatePath("/buyer/campaigns");
   revalidatePath("/worker/campaigns");
   redirect("/buyer/campaigns");
+}
+
+export async function importCampaignAction(formData: FormData) {
+  const db = requireDb();
+  const parsed = importCampaignSchema.safeParse({
+    sourcePlatform: formData.get("sourcePlatform"),
+    externalUrl: formData.get("externalUrl"),
+    externalCampaignId: formData.get("externalCampaignId") || undefined,
+    title: formData.get("title"),
+    description: formData.get("description") || undefined,
+    rules: formData.get("rules") || undefined,
+    platform: formData.get("platform"),
+    budgetUsd: formData.get("budgetUsd"),
+    budgetPctRemaining: formData.get("budgetPctRemaining"),
+    externalPayoutPer1k: formData.get("externalPayoutPer1k"),
+    ourPayoutPer1k: formData.get("ourPayoutPer1k") || undefined,
+    approvalRatePct: formData.get("approvalRatePct"),
+    geographicRestriction: formData.get("geographicRestriction") || "global",
+    niche: formData.get("niche") || undefined,
+    requiredHashtags: formData.get("requiredHashtags") || undefined,
+    sourceAssetUrls: formData.get("sourceAssetUrls") || undefined,
+  });
+
+  if (!parsed.success) {
+    throw new Error(parsed.error.issues.map((issue) => issue.message).join(", "));
+  }
+
+  const rules = linesToArray(parsed.data.rules);
+  const sourceAssetUrls = linesToArray(parsed.data.sourceAssetUrls);
+  const requiredHashtags = csvToArray(parsed.data.requiredHashtags);
+  const niche = parsed.data.niche || inferNiche(`${parsed.data.title} ${parsed.data.description || ""} ${rules.join(" ")}`);
+  const filter = validateImportedCampaign({
+    sourcePlatform: parsed.data.sourcePlatform,
+    externalCampaignId: parsed.data.externalCampaignId,
+    externalUrl: parsed.data.externalUrl,
+    title: parsed.data.title,
+    description: parsed.data.description,
+    rules,
+    platform: parsed.data.platform,
+    budgetUsd: parsed.data.budgetUsd,
+    budgetPctRemaining: parsed.data.budgetPctRemaining,
+    externalPayoutPer1k: parsed.data.externalPayoutPer1k,
+    approvalRatePct: parsed.data.approvalRatePct,
+    niche,
+    requiredHashtags,
+    sourceAssetUrls,
+  });
+
+  if (!filter.allowed) {
+    throw new Error(filter.reason || "Campaign failed import filters.");
+  }
+
+  const workerPayout = parsed.data.ourPayoutPer1k || calculateWorkerPayout(parsed.data.externalPayoutPer1k);
+  const remainingBudget = (parsed.data.budgetUsd * parsed.data.budgetPctRemaining) / 100;
+
+  const [source] = await db.insert(campaignSources).values({
+    sourcePlatform: parsed.data.sourcePlatform,
+    externalCampaignId: parsed.data.externalCampaignId,
+    externalUrl: parsed.data.externalUrl,
+    rawData: {
+      importedBy: "admin_manual_form",
+      approvalRatePct: parsed.data.approvalRatePct,
+      budgetPctRemaining: parsed.data.budgetPctRemaining,
+    },
+  }).returning();
+
+  await db.insert(campaigns).values({
+    sourceId: source.id,
+    title: parsed.data.title,
+    description: parsed.data.description,
+    platform: parsed.data.platform,
+    status: "active",
+    budgetUsd: parsed.data.budgetUsd.toFixed(2),
+    remainingBudgetUsd: remainingBudget.toFixed(2),
+    buyerCpmUsd: parsed.data.externalPayoutPer1k.toFixed(4),
+    workerCpmUsd: workerPayout.toFixed(4),
+    isImported: true,
+    externalPayoutPer1k: parsed.data.externalPayoutPer1k,
+    ourPayoutPer1k: workerPayout,
+    geographicRestriction: filter.geographicRestriction,
+    approvalRatePct: parsed.data.approvalRatePct,
+    budgetPctRemaining: parsed.data.budgetPctRemaining,
+    niche,
+    requiredHashtags,
+    rules,
+    sourceAssetUrls,
+    landingUrl: parsed.data.externalUrl,
+  });
+
+  revalidatePath("/admin/import");
+  revalidatePath("/worker/campaigns");
+  revalidatePath("/buyer/campaigns");
+  redirect("/worker/campaigns");
 }
 
 export async function submitClipAction(formData: FormData) {
