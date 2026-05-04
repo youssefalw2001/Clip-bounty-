@@ -38,7 +38,7 @@ export const importCampaignSchema = z.object({
 export const workerProfileSchema = z.object({
   displayName: z.string().min(2, "Display name is required").max(120),
   tonWalletAddress: z.string().min(8, "TON wallet is required for payouts").max(200),
-  country: z.string().min(2).max(2).default("IN"),
+  country: z.string().min(2).max(8).default("IN"),
   tiktokHandle: z.string().max(120).optional(),
   tiktokFollowers: z.coerce.number().int().min(0).default(0),
   instagramHandle: z.string().max(120).optional(),
