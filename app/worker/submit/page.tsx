@@ -1,5 +1,6 @@
 import { submitClipAction } from "@/app/actions";
 import { DashboardShell } from "@/components/DashboardShell";
+import { UserIdentityInput } from "@/components/UserIdentityInput";
 
 export default function SubmitClipPage() {
   return (
@@ -8,6 +9,7 @@ export default function SubmitClipPage() {
       subtitle="Paste the public TikTok, YouTube Shorts, or Instagram Reels link you posted for a campaign."
     >
       <form action={submitClipAction} className="max-w-2xl rounded-2xl border border-slate-800 bg-slate-900 p-6">
+        <UserIdentityInput />
         <label className="block text-sm font-semibold text-slate-200" htmlFor="campaignId">
           Campaign UUID
         </label>
@@ -36,7 +38,7 @@ export default function SubmitClipPage() {
           Submit for review
         </button>
         <p className="mt-4 text-sm text-slate-400">
-          Beta note: submissions now save to Postgres once DATABASE_URL and migrations are configured.
+          Beta note: submissions now save under your unique Telegram or browser session identity.
         </p>
       </form>
     </DashboardShell>
