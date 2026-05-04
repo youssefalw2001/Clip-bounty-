@@ -1,8 +1,11 @@
 import Link from "next/link";
+import { approveClipAction, rejectClipAction } from "@/app/actions";
 import { DashboardShell } from "@/components/DashboardShell";
-import { clips } from "@/lib/data";
+import { getClipRows } from "@/lib/queries";
 
-export default function AdminClipsPage() {
+export default async function AdminClipsPage() {
+  const clips = await getClipRows();
+
   return (
     <DashboardShell
       title="Admin clip review"
@@ -13,8 +16,8 @@ export default function AdminClipsPage() {
           Open payout queue
         </Link>
       </div>
-      <div className="overflow-hidden rounded-2xl border border-slate-800">
-        <table className="w-full text-left text-sm">
+      <div className="overflow-x-auto rounded-2xl border border-slate-800">
+        <table className="w-full min-w-[900px] text-left text-sm">
           <thead className="bg-slate-900 text-slate-300">
             <tr>
               <th className="p-4">Clip ID</th>
@@ -37,8 +40,14 @@ export default function AdminClipsPage() {
                 <td className="p-4">{clip.status}</td>
                 <td className="p-4">
                   <div className="flex gap-2">
-                    <button className="rounded-lg bg-emerald-400 px-3 py-2 text-xs font-bold text-slate-950">Approve</button>
-                    <button className="rounded-lg bg-red-400 px-3 py-2 text-xs font-bold text-slate-950">Reject</button>
+                    <form action={approveClipAction}>
+                      <input type="hidden" name="clipId" value={clip.id} />
+                      <button className="rounded-lg bg-emerald-400 px-3 py-2 text-xs font-bold text-slate-950">Approve</button>
+                    </form>
+                    <form action={rejectClipAction}>
+                      <input type="hidden" name="clipId" value={clip.id} />
+                      <button className="rounded-lg bg-red-400 px-3 py-2 text-xs font-bold text-slate-950">Reject</button>
+                    </form>
                   </div>
                 </td>
               </tr>
