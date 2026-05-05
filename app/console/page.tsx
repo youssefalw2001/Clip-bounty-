@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { AutoImportRunner } from "@/components/AutoImportRunner";
 import { DashboardShell } from "@/components/DashboardShell";
 
 const sections = [
@@ -58,6 +59,7 @@ export default function ConsolePage() {
       title="ClipBounty app console"
       subtitle="Use these buttons to test the full MVP flow on mobile: import, profile, claim, submit, review, payout."
     >
+      <AutoImportRunner />
       <div className="grid gap-4 md:grid-cols-2">
         {sections.map((section) => (
           <Link
