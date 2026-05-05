@@ -1,4 +1,4 @@
--- ClipBounty MVP database setup
+-- ClipBounty MVP database setup / repair
 -- Run this in Supabase SQL Editor. Safe to re-run.
 
 create extension if not exists "pgcrypto";
@@ -56,9 +56,11 @@ create table if not exists users (
   updated_at timestamp not null default now()
 );
 
+alter table users add column if not exists telegram_username varchar(64);
+alter table users add column if not exists country_code varchar(8);
 alter table users add column if not exists country varchar(8) not null default 'IN';
-alter table users alter column country_code type varchar(8);
 alter table users add column if not exists display_name text;
+alter table users add column if not exists ton_wallet_address text;
 alter table users add column if not exists tiktok_handle text;
 alter table users add column if not exists tiktok_followers integer not null default 0;
 alter table users add column if not exists instagram_handle text;
@@ -67,6 +69,11 @@ alter table users add column if not exists youtube_handle text;
 alter table users add column if not exists youtube_subscribers integer not null default 0;
 alter table users add column if not exists niches jsonb default '[]'::jsonb;
 alter table users add column if not exists is_profile_complete boolean not null default false;
+alter table users add column if not exists risk_score integer not null default 0;
+alter table users add column if not exists is_banned boolean not null default false;
+alter table users add column if not exists created_at timestamp not null default now();
+alter table users add column if not exists updated_at timestamp not null default now();
+create unique index if not exists users_telegram_user_id_idx on users(telegram_user_id);
 create index if not exists users_profile_complete_idx on users(is_profile_complete);
 
 create table if not exists campaign_sources (
@@ -79,6 +86,15 @@ create table if not exists campaign_sources (
   is_active boolean not null default true
 );
 
+alter table campaign_sources add column if not exists source_platform text not null default 'manual';
+alter table campaign_sources alter column source_platform drop default;
+alter table campaign_sources add column if not exists external_campaign_id text;
+alter table campaign_sources add column if not exists external_url text not null default 'manual';
+alter table campaign_sources alter column external_url drop default;
+alter table campaign_sources add column if not exists raw_data jsonb;
+alter table campaign_sources add column if not exists last_fetched_at timestamp not null default now();
+alter table campaign_sources add column if not exists is_active boolean not null default true;
+create unique index if not exists campaign_sources_external_url_idx on campaign_sources(external_url);
 create index if not exists campaign_sources_platform_idx on campaign_sources(source_platform);
 
 create table if not exists campaigns (
@@ -111,7 +127,16 @@ create table if not exists campaigns (
   updated_at timestamp not null default now()
 );
 
+alter table campaigns add column if not exists buyer_id uuid references users(id);
 alter table campaigns add column if not exists source_id uuid references campaign_sources(id);
+alter table campaigns add column if not exists description text;
+alter table campaigns add column if not exists platform platform not null default 'youtube';
+alter table campaigns alter column platform drop default;
+alter table campaigns add column if not exists status campaign_status not null default 'draft';
+alter table campaigns add column if not exists budget_usd numeric(12,2) not null default 0;
+alter table campaigns add column if not exists remaining_budget_usd numeric(12,2) not null default 0;
+alter table campaigns add column if not exists buyer_cpm_usd numeric(8,4) not null default 0;
+alter table campaigns add column if not exists worker_cpm_usd numeric(8,4) not null default 0;
 alter table campaigns add column if not exists is_imported boolean not null default false;
 alter table campaigns add column if not exists external_payout_per_1k real;
 alter table campaigns add column if not exists our_payout_per_1k real;
@@ -119,7 +144,15 @@ alter table campaigns add column if not exists geographic_restriction text not n
 alter table campaigns add column if not exists approval_rate_pct integer;
 alter table campaigns add column if not exists budget_pct_remaining integer;
 alter table campaigns add column if not exists niche text default 'general';
-
+alter table campaigns add column if not exists required_hashtags jsonb default '[]'::jsonb;
+alter table campaigns add column if not exists rules jsonb default '[]'::jsonb;
+alter table campaigns add column if not exists source_asset_urls jsonb default '[]'::jsonb;
+alter table campaigns add column if not exists landing_url text;
+alter table campaigns add column if not exists min_views_to_pay integer not null default 1000;
+alter table campaigns add column if not exists max_views_per_clip integer;
+alter table campaigns add column if not exists review_required boolean not null default true;
+alter table campaigns add column if not exists created_at timestamp not null default now();
+alter table campaigns add column if not exists updated_at timestamp not null default now();
 create index if not exists campaign_status_idx on campaigns(status);
 create index if not exists campaign_buyer_idx on campaigns(buyer_id);
 create index if not exists campaign_source_idx on campaigns(source_id);
@@ -143,8 +176,19 @@ create table if not exists clips (
   last_tracked_at timestamp
 );
 
+alter table clips add column if not exists worker_id uuid references users(id);
+alter table clips add column if not exists platform_video_id text;
+alter table clips add column if not exists current_views integer not null default 0;
+alter table clips add column if not exists payable_views integer not null default 0;
+alter table clips add column if not exists estimated_earnings_usd numeric(10,4) not null default 0;
+alter table clips add column if not exists fraud_score integer not null default 0;
+alter table clips add column if not exists fraud_reasons jsonb default '[]'::jsonb;
+alter table clips add column if not exists submitted_at timestamp not null default now();
+alter table clips add column if not exists reviewed_at timestamp;
+alter table clips add column if not exists last_tracked_at timestamp;
 create index if not exists clips_campaign_idx on clips(campaign_id);
 create index if not exists clips_worker_idx on clips(worker_id);
+create unique index if not exists clips_url_idx on clips(url);
 
 create table if not exists view_snapshots (
   id uuid primary key default gen_random_uuid(),
@@ -170,6 +214,15 @@ create table if not exists payouts (
   created_at timestamp not null default now(),
   paid_at timestamp
 );
+
+alter table payouts add column if not exists worker_id uuid references users(id);
+alter table payouts add column if not exists clip_id uuid references clips(id);
+alter table payouts add column if not exists wallet_address text;
+alter table payouts add column if not exists tx_hash text;
+alter table payouts add column if not exists created_at timestamp not null default now();
+alter table payouts add column if not exists paid_at timestamp;
+create index if not exists payouts_worker_idx on payouts(worker_id);
+create index if not exists payouts_clip_idx on payouts(clip_id);
 
 insert into users (telegram_user_id, telegram_username, role)
 values ('demo_buyer', 'demo_buyer', 'buyer')
