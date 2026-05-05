@@ -7,9 +7,16 @@ function budgetColor(percent: number) {
   return "from-red-400 to-orange-300";
 }
 
+function sourceLabel(source: string) {
+  if (source === "reach_cat") return "Reach.cat";
+  if (source === "mrktplce") return "MRKTPLCE";
+  return source;
+}
+
 export function CampaignCard({ campaign }: { campaign: Campaign }) {
   const fillRate = campaign.budgetPctRemaining ?? Math.max(0, Math.min(100, Math.round((campaign.remainingBudget / Math.max(campaign.budget, 1)) * 100)));
   const source = campaign.sourcePlatform || (campaign.isImported ? "imported" : "manual");
+  const isReachCat = source === "reach_cat";
   const submitHref = `/worker/submit?campaignId=${campaign.id}&campaignTitle=${encodeURIComponent(campaign.title)}`;
 
   return (
@@ -18,7 +25,10 @@ export function CampaignCard({ campaign }: { campaign: Campaign }) {
         <div>
           <div className="flex flex-wrap items-center gap-2">
             <p className="rounded-full border border-emerald-300/20 bg-emerald-300/10 px-3 py-1 text-xs font-bold uppercase tracking-widest text-emerald-200">{campaign.platform}</p>
-            <p className="rounded-full border border-amber-300/20 bg-amber-300/10 px-3 py-1 text-xs font-bold uppercase tracking-widest text-amber-200">Via {source}</p>
+            <p className="rounded-full border border-amber-300/20 bg-amber-300/10 px-3 py-1 text-xs font-bold uppercase tracking-widest text-amber-200">Via {sourceLabel(source)}</p>
+            {isReachCat ? (
+              <p className="rounded-full border border-emerald-300/30 bg-emerald-300/15 px-3 py-1 text-xs font-black uppercase tracking-widest text-emerald-100">USDT</p>
+            ) : null}
             {campaign.niche ? (
               <p className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-bold uppercase tracking-widest text-stone-300">{campaign.niche}</p>
             ) : null}
@@ -55,8 +65,10 @@ export function CampaignCard({ campaign }: { campaign: Campaign }) {
         </div>
       </div>
 
-      <div className="mt-5 rounded-2xl border border-amber-300/15 bg-amber-300/10 p-3 text-xs leading-5 text-amber-100">
-        Submit your clip URL within 60 minutes of posting. Late submissions are the top reason clips get rejected.
+      <div className={`mt-5 rounded-2xl border p-3 text-xs leading-5 ${isReachCat ? "border-emerald-300/20 bg-emerald-300/10 text-emerald-100" : "border-amber-300/15 bg-amber-300/10 text-amber-100"}`}>
+        {isReachCat
+          ? "Reach.cat source: USDT payout campaign. Submit quickly, keep the clip public, and avoid fake views."
+          : "Submit your clip URL within 60 minutes of posting. Late submissions are the top reason clips get rejected."}
       </div>
 
       <div className="mt-5 flex flex-wrap gap-3">
