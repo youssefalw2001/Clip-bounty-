@@ -66,31 +66,18 @@ async function loadFeed(): Promise<ImportedCampaignInput[]> {
   throw new Error("Campaign feed must be an array or { campaigns: [...] }.");
 }
 
-async function importOne(item: ImportedCampaignInput) {
-  const db = requireDb();
+function buildCampaignValues(item: ImportedCampaignInput, sourceId: string | null) {
   const filter = validateImportedCampaign(item);
-
-  if (!filter.allowed) {
-    return { imported: false, title: item.title, reason: filter.reason || "Filtered out" };
-  }
-
   const workerPayout = calculateWorkerPayout(item.externalPayoutPer1k, item.sourcePlatform);
   const remainingBudget = (item.budgetUsd * item.budgetPctRemaining) / 100;
   const niche = item.niche || inferNiche(`${item.title} ${item.description || ""} ${(item.rules || []).join(" ")}`);
 
-  const [source] = await db.insert(campaignSources).values({
-    sourcePlatform: item.sourcePlatform,
-    externalCampaignId: item.externalCampaignId,
-    externalUrl: item.externalUrl,
-    rawData: item,
-  }).returning();
-
-  await db.insert(campaigns).values({
-    sourceId: source.id,
+  return {
+    sourceId,
     title: item.title,
     description: item.description,
     platform: item.platform || "youtube",
-    status: "active",
+    status: "active" as const,
     budgetUsd: item.budgetUsd.toFixed(2),
     remainingBudgetUsd: remainingBudget.toFixed(2),
     buyerCpmUsd: item.externalPayoutPer1k.toFixed(4),
@@ -106,9 +93,40 @@ async function importOne(item: ImportedCampaignInput) {
     rules: item.rules || [],
     sourceAssetUrls: item.sourceAssetUrls || [],
     landingUrl: item.externalUrl,
-  });
+  };
+}
 
-  return { imported: true, title: item.title, sourcePlatform: item.sourcePlatform };
+async function importOne(item: ImportedCampaignInput) {
+  const db = requireDb();
+  const filter = validateImportedCampaign(item);
+
+  if (!filter.allowed) {
+    return { imported: false, title: item.title, reason: filter.reason || "Filtered out" };
+  }
+
+  let sourceId: string | null = null;
+  let sourceWarning = "";
+
+  try {
+    const [source] = await db.insert(campaignSources).values({
+      sourcePlatform: item.sourcePlatform,
+      externalCampaignId: item.externalCampaignId,
+      externalUrl: item.externalUrl,
+      rawData: item,
+    }).returning();
+    sourceId = source.id;
+  } catch (error) {
+    sourceWarning = error instanceof Error ? `Source record skipped: ${error.message}` : "Source record skipped.";
+  }
+
+  await db.insert(campaigns).values(buildCampaignValues(item, sourceId));
+
+  return {
+    imported: true,
+    title: item.title,
+    sourcePlatform: item.sourcePlatform,
+    reason: sourceWarning || "Imported successfully",
+  };
 }
 
 export async function POST(request: NextRequest) {
