@@ -1,21 +1,9 @@
-import { NextRequest, NextResponse } from "next/server";
-import { scrapeCampaignDraft } from "@/lib/sourceScraper";
+import { NextResponse } from "next/server";
 
-export async function POST(request: NextRequest) {
-  const body = await request.json().catch(() => null);
-  const url = body?.url;
+export async function POST() {
+  return NextResponse.json({ error: "This route has been retired. GhostWallet uses /api/ghost/scan." }, { status: 410 });
+}
 
-  if (!url || typeof url !== "string") {
-    return NextResponse.json({ error: "url is required" }, { status: 400 });
-  }
-
-  try {
-    const draft = await scrapeCampaignDraft(url);
-    return NextResponse.json({ draft });
-  } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Failed to scrape campaign" },
-      { status: 400 },
-    );
-  }
+export async function GET() {
+  return NextResponse.json({ error: "This route has been retired. GhostWallet uses /api/ghost/scan." }, { status: 410 });
 }
