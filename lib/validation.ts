@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 export const platformSchema = z.enum(["youtube", "tiktok", "instagram"]);
-export const sourcePlatformSchema = z.enum(["whop", "vyro", "mrktplce", "manual"]);
+export const sourcePlatformSchema = z.enum(["whop", "vyro", "mrktplce", "reach_cat", "manual"]);
 export const geographicRestrictionSchema = z.enum(["global", "us_only", "eu_only"]);
 
 export const createCampaignSchema = z.object({
@@ -18,7 +18,7 @@ export const createCampaignSchema = z.object({
 
 export const importCampaignSchema = z.object({
   sourcePlatform: sourcePlatformSchema,
-  externalUrl: z.string().url("Enter the Whop, Vyro, MRKTPLCE, or manual source URL"),
+  externalUrl: z.string().url("Enter the Whop, Vyro, MRKTPLCE, Reach.cat, or manual source URL"),
   externalCampaignId: z.string().max(200).optional(),
   title: z.string().min(3).max(160),
   description: z.string().max(3000).optional(),
