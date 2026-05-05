@@ -5,6 +5,21 @@ import { calculateWorkerPayout, inferNiche, validateImportedCampaign, type Impor
 
 const fallbackFeed: ImportedCampaignInput[] = [
   {
+    sourcePlatform: "reach_cat",
+    externalCampaignId: "sample-reach-cat-fitness",
+    externalUrl: "https://reach.cat/sample-fitness-campaign",
+    title: "Reach.cat Global Fitness Clips",
+    description: "Global Reach.cat style campaign. Clip fitness and mobility content for short-form platforms. USDT payout source.",
+    rules: ["Global audience accepted", "No fake views", "Submit clip URLs quickly after posting", "USDT payout source"],
+    platform: "tiktok",
+    budgetUsd: 2000,
+    budgetPctRemaining: 90,
+    externalPayoutPer1k: 2,
+    approvalRatePct: 100,
+    niche: "fitness",
+    requiredHashtags: ["#fitness", "#mobility"],
+  },
+  {
     sourcePlatform: "whop",
     externalCampaignId: "sample-global-crypto",
     externalUrl: "https://example.com/source/sample-global-crypto",
@@ -59,7 +74,7 @@ async function importOne(item: ImportedCampaignInput) {
     return { imported: false, title: item.title, reason: filter.reason || "Filtered out" };
   }
 
-  const workerPayout = calculateWorkerPayout(item.externalPayoutPer1k);
+  const workerPayout = calculateWorkerPayout(item.externalPayoutPer1k, item.sourcePlatform);
   const remainingBudget = (item.budgetUsd * item.budgetPctRemaining) / 100;
   const niche = item.niche || inferNiche(`${item.title} ${item.description || ""} ${(item.rules || []).join(" ")}`);
 
@@ -108,8 +123,13 @@ export async function POST(request: NextRequest) {
     for (const item of feed) {
       try {
         results.push(await importOne(item));
-      } catch {
-        results.push({ imported: false, title: item.title, reason: "Already imported or insert failed" });
+      } catch (error) {
+        const reason = error instanceof Error && error.message.toLowerCase().includes("duplicate")
+          ? "Already imported"
+          : error instanceof Error
+            ? error.message
+            : "Already imported or insert failed";
+        results.push({ imported: false, title: item.title, reason });
       }
     }
 
@@ -131,6 +151,7 @@ export async function GET(request: NextRequest) {
     status: "ready",
     mode: process.env.CAMPAIGN_FEED_URL ? "external_feed" : "fallback_sample_feed",
     feedUrlConfigured: Boolean(process.env.CAMPAIGN_FEED_URL),
+    supportedSources: ["reach_cat", "whop", "vyro", "mrktplce", "manual"],
     message: "POST this route from a scheduler to automatically import qualifying campaigns from CAMPAIGN_FEED_URL.",
   });
 }
