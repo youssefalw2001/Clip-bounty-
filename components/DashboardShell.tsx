@@ -22,6 +22,7 @@ const navGroups = [
     label: "Admin",
     items: [
       { href: "/admin/import", label: "Import" },
+      { href: "/admin/source-submissions", label: "Source Queue" },
       { href: "/admin/clips", label: "Review" },
       { href: "/admin/payouts", label: "Payouts" },
     ],
