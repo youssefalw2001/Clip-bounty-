@@ -50,6 +50,7 @@ function extractNumberNear(text: string, terms: string[]) {
 
 function inferSourcePlatform(url: string): SourcePlatform {
   const host = new URL(url).hostname.toLowerCase();
+  if (host.includes("reach.cat") || host.includes("reachclipping")) return "reach_cat";
   if (host.includes("whop")) return "whop";
   if (host.includes("vyro")) return "vyro";
   if (host.includes("mrktplce")) return "mrktplce";
@@ -93,14 +94,14 @@ export async function scrapeCampaignDraft(url: string) {
   const description = extractDescription(html);
   const text = stripTags(html).slice(0, 20_000);
   const combined = `${title} ${description} ${text}`;
+  const sourcePlatform = inferSourcePlatform(url);
 
-  const externalPayoutPer1k = extractNumberNear(combined, ["per 1k", "per 1,000", "cpm", "views"]) || 1;
+  const externalPayoutPer1k = extractNumberNear(combined, ["per 1k", "per 1,000", "cpm", "views"]) || (sourcePlatform === "reach_cat" ? 2 : 1);
   const budgetPctRemaining = extractNumberNear(combined, ["remaining", "budget left", "left"]) || 100;
-  const approvalRatePct = extractNumberNear(combined, ["approval", "approved", "approval rate"]) || 90;
-  const workerPayout = calculateWorkerPayout(externalPayoutPer1k);
+  const approvalRatePct = sourcePlatform === "reach_cat" ? 100 : extractNumberNear(combined, ["approval", "approved", "approval rate"]) || 90;
+  const workerPayout = calculateWorkerPayout(externalPayoutPer1k, sourcePlatform);
   const niche = inferNiche(combined);
   const platform = inferPlatform(combined);
-  const sourcePlatform = inferSourcePlatform(url);
   const filter = validateImportedCampaign({
     sourcePlatform,
     externalUrl: url,
