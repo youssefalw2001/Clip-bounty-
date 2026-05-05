@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { Transaction } from "@solana/web3.js";
 
 type GhostScanResult = {
   wallet: string;
@@ -39,12 +40,27 @@ type RecoveryPlan = {
   }>;
 };
 
+type RecoveryTransaction = {
+  wallet: string;
+  transactionBase64: string;
+  accountsInTransaction: number;
+  totalRecoverableAccounts: number;
+  reclaimableSol: number;
+  feeBps: number;
+  feeSol: number;
+  userReceivesSol: number;
+  feeWalletConfigured: boolean;
+  safety: string;
+};
+
 type SolanaProvider = {
   isPhantom?: boolean;
   isSolflare?: boolean;
   publicKey?: { toString: () => string };
   connect: () => Promise<{ publicKey: { toString: () => string } }>;
   disconnect?: () => Promise<void>;
+  signTransaction?: (transaction: Transaction) => Promise<Transaction>;
+  signAndSendTransaction?: (transaction: Transaction) => Promise<{ signature: string }>;
 };
 
 declare global {
@@ -63,6 +79,23 @@ function shortWallet(value: string) {
   return `${value.slice(0, 6)}...${value.slice(-4)}`;
 }
 
+function base64ToUint8Array(base64: string) {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes;
+}
+
+function uint8ArrayToBase64(bytes: Uint8Array) {
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += 1) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
+}
+
 export function GhostScanner() {
   const [wallet, setWallet] = useState("");
   const [connectedWallet, setConnectedWallet] = useState("");
@@ -70,10 +103,14 @@ export function GhostScanner() {
   const [loading, setLoading] = useState(false);
   const [connecting, setConnecting] = useState(false);
   const [preparing, setPreparing] = useState(false);
+  const [recovering, setRecovering] = useState(false);
   const [result, setResult] = useState<GhostScanResult | null>(null);
   const [recoveryPlan, setRecoveryPlan] = useState<RecoveryPlan | null>(null);
+  const [recoveryTx, setRecoveryTx] = useState<RecoveryTransaction | null>(null);
+  const [recoverySignature, setRecoverySignature] = useState("");
   const [error, setError] = useState("");
   const [planError, setPlanError] = useState("");
+  const [recoveryError, setRecoveryError] = useState("");
 
   const feePreview = useMemo(() => {
     if (!result) return 0;
@@ -84,7 +121,10 @@ export function GhostScanner() {
     setConnecting(true);
     setError("");
     setPlanError("");
+    setRecoveryError("");
     setRecoveryPlan(null);
+    setRecoveryTx(null);
+    setRecoverySignature("");
 
     try {
       const provider = window.solana || window.solflare;
@@ -110,8 +150,11 @@ export function GhostScanner() {
     setLoading(true);
     setError("");
     setPlanError("");
+    setRecoveryError("");
     setResult(null);
     setRecoveryPlan(null);
+    setRecoveryTx(null);
+    setRecoverySignature("");
 
     try {
       const res = await fetch("/api/ghost/scan", {
@@ -135,7 +178,10 @@ export function GhostScanner() {
     const targetWallet = wallet.trim();
     setPreparing(true);
     setPlanError("");
+    setRecoveryError("");
     setRecoveryPlan(null);
+    setRecoveryTx(null);
+    setRecoverySignature("");
 
     try {
       const res = await fetch("/api/ghost/recovery-plan", {
@@ -155,13 +201,75 @@ export function GhostScanner() {
     }
   }
 
+  async function recoverSol() {
+    const targetWallet = wallet.trim();
+    setRecovering(true);
+    setRecoveryError("");
+    setRecoverySignature("");
+    setRecoveryTx(null);
+
+    try {
+      const provider = window.solana || window.solflare;
+      if (!provider) {
+        throw new Error("Connect Phantom, Solflare, or Backpack before recovering SOL.");
+      }
+
+      const response = await provider.connect();
+      const connectedAddress = response.publicKey.toString();
+      if (connectedAddress !== targetWallet) {
+        throw new Error("Connected wallet does not match the scanned wallet. Reconnect the correct wallet and try again.");
+      }
+
+      const buildRes = await fetch("/api/ghost/build-recovery", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ wallet: targetWallet }),
+      });
+      const buildData = await buildRes.json();
+
+      if (!buildRes.ok) throw new Error(buildData.error || "Could not build recovery transaction");
+
+      setRecoveryTx(buildData);
+      const transaction = Transaction.from(base64ToUint8Array(buildData.transactionBase64));
+
+      if (provider.signAndSendTransaction) {
+        const signedAndSent = await provider.signAndSendTransaction(transaction);
+        setRecoverySignature(signedAndSent.signature);
+        await scan(targetWallet);
+        return;
+      }
+
+      if (!provider.signTransaction) {
+        throw new Error("Your wallet does not support transaction signing in this browser. Try Phantom, Solflare, or Backpack.");
+      }
+
+      const signedTx = await provider.signTransaction(transaction);
+      const rawTransactionBase64 = uint8ArrayToBase64(signedTx.serialize());
+      const sendRes = await fetch("/api/ghost/send-recovery", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ rawTransactionBase64 }),
+      });
+      const sendData = await sendRes.json();
+
+      if (!sendRes.ok) throw new Error(sendData.error || "Could not send signed transaction");
+
+      setRecoverySignature(sendData.signature);
+      await scan(targetWallet);
+    } catch (err) {
+      setRecoveryError(err instanceof Error ? err.message : "Recovery failed");
+    } finally {
+      setRecovering(false);
+    }
+  }
+
   return (
     <div className="space-y-6">
       <section className="rounded-[2rem] border border-emerald-300/20 bg-emerald-300/10 p-5 shadow-2xl shadow-emerald-950/20 md:p-6">
         <p className="text-xs font-black uppercase tracking-[0.24em] text-emerald-200">Wallet scanner</p>
         <h2 className="mt-3 text-2xl font-black text-white">Connect or paste a public Solana wallet</h2>
         <p className="mt-3 text-sm leading-6 text-emerald-100/80">
-          GhostWallet never asks for seed phrases or private keys. Wallet connection only reads your public address in this build.
+          GhostWallet never asks for seed phrases or private keys. Wallet connection only reads your public address until you approve a recovery transaction.
         </p>
 
         <div className="mt-5 grid gap-3 md:grid-cols-[auto_1fr]">
@@ -221,12 +329,12 @@ export function GhostScanner() {
             <div className="rounded-3xl border border-white/10 bg-black/30 p-5">
               <p className="text-xs font-black uppercase tracking-widest text-stone-500">Fee preview</p>
               <p className="mt-2 text-3xl font-black text-white">{formatSol(feePreview)}</p>
-              <p className="mt-1 text-xs text-stone-500">Example 7% success fee, not charged in this scan build.</p>
+              <p className="mt-1 text-xs text-stone-500">Example 7% success fee. If no fee wallet is configured, no fee is added.</p>
             </div>
             <div className="rounded-3xl border border-white/10 bg-black/30 p-5">
-              <p className="text-xs font-black uppercase tracking-widest text-stone-500">Next build</p>
-              <p className="mt-2 text-2xl font-black text-white">Sign recovery</p>
-              <p className="mt-1 text-xs text-stone-500">User-signed close-account actions are next.</p>
+              <p className="text-xs font-black uppercase tracking-widest text-stone-500">Recovery</p>
+              <p className="mt-2 text-2xl font-black text-white">Wallet signed</p>
+              <p className="mt-1 text-xs text-stone-500">Only runs after wallet approval.</p>
             </div>
           </div>
 
@@ -273,7 +381,7 @@ export function GhostScanner() {
           <p className="text-xs font-black uppercase tracking-[0.24em] text-amber-200">Recovery plan prepared</p>
           <h2 className="mt-3 text-3xl font-black text-white">Ready to recover {formatSol(recoveryPlan.reclaimableSol)} SOL</h2>
           <p className="mt-3 text-sm leading-6">
-            GhostWallet found {recoveryPlan.accountsToClose} token accounts that can be closed after user approval. This build does not sign or send the transaction yet.
+            GhostWallet found {recoveryPlan.accountsToClose} token accounts that can be closed after user approval.
           </p>
 
           <div className="mt-5 grid gap-4 md:grid-cols-3">
@@ -287,9 +395,9 @@ export function GhostScanner() {
               <p className="mt-1 text-xs text-stone-500">{recoveryPlan.feeBps / 100}% preview</p>
             </div>
             <div className="rounded-3xl border border-white/10 bg-black/30 p-5">
-              <p className="text-xs font-black uppercase tracking-widest text-stone-500">Signing</p>
-              <p className="mt-2 text-2xl font-black text-white">Disabled</p>
-              <p className="mt-1 text-xs text-stone-500">Next build enables wallet-signed recovery.</p>
+              <p className="text-xs font-black uppercase tracking-widest text-stone-500">Transaction</p>
+              <p className="mt-2 text-2xl font-black text-white">Up to 8 accounts</p>
+              <p className="mt-1 text-xs text-stone-500">Large wallets can run recovery multiple times.</p>
             </div>
           </div>
 
@@ -297,6 +405,44 @@ export function GhostScanner() {
             <p className="text-sm font-bold text-white">Safety check</p>
             <p className="mt-2 text-sm leading-6 text-amber-100/80">{recoveryPlan.safety}</p>
           </div>
+
+          <div className="mt-5 flex flex-col gap-3 md:flex-row md:items-center">
+            <button
+              type="button"
+              onClick={recoverSol}
+              disabled={recovering || !wallet || recoveryPlan.accountsToClose === 0}
+              className="rounded-2xl bg-emerald-300 px-6 py-4 text-sm font-black uppercase tracking-widest text-black disabled:opacity-50"
+            >
+              {recovering ? "Open wallet..." : "Recover SOL"}
+            </button>
+            <p className="text-xs leading-5 text-amber-100/80">
+              Your wallet will show the full transaction before anything is signed.
+            </p>
+          </div>
+
+          {recoveryTx ? (
+            <div className="mt-4 rounded-2xl border border-white/10 bg-black/30 p-4 text-sm text-stone-200">
+              Built transaction for {recoveryTx.accountsInTransaction} accounts. Estimated user receives: {formatSol(recoveryTx.userReceivesSol)} SOL.
+            </div>
+          ) : null}
+
+          {recoverySignature ? (
+            <div className="mt-4 rounded-2xl border border-emerald-300/20 bg-emerald-300/10 p-4 text-sm text-emerald-100">
+              <p className="font-black text-white">Recovery sent</p>
+              <a
+                href={`https://solscan.io/tx/${recoverySignature}`}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-2 block break-all font-semibold text-emerald-200 underline"
+              >
+                {recoverySignature}
+              </a>
+            </div>
+          ) : null}
+
+          {recoveryError ? (
+            <p className="mt-4 rounded-2xl border border-red-300/20 bg-red-300/10 p-4 text-sm font-bold text-red-100">{recoveryError}</p>
+          ) : null}
         </section>
       ) : null}
     </div>
