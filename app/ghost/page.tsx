@@ -16,9 +16,9 @@ export default function GhostWalletPage() {
           </span>
           <span className="text-xl font-black tracking-tight">GhostWallet</span>
         </Link>
-        <Link href="/app" className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-black uppercase tracking-widest text-stone-200">
-          ClipBounty app
-        </Link>
+        <a href="#scanner" className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-black uppercase tracking-widest text-stone-200">
+          Scan now
+        </a>
       </nav>
 
       <section className="relative z-10 mx-auto max-w-6xl px-5 pb-20 pt-10 md:pt-16">
@@ -58,7 +58,9 @@ export default function GhostWalletPage() {
             </div>
           </div>
 
-          <GhostScanner />
+          <div id="scanner">
+            <GhostScanner />
+          </div>
         </div>
       </section>
     </main>
