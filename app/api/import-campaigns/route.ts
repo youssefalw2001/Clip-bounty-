@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import postgres from "postgres";
 import { requireDb } from "@/db";
 import { campaignSources, campaigns } from "@/db/schema";
 import { calculateWorkerPayout, inferNiche, validateImportedCampaign, type ImportedCampaignInput } from "@/lib/campaignImport";
@@ -96,23 +97,42 @@ function buildFullCampaignValues(item: ImportedCampaignInput, sourceId: string |
   };
 }
 
-function buildBasicCampaignValues(item: ImportedCampaignInput) {
+async function rawBasicCampaignInsert(item: ImportedCampaignInput) {
+  if (!process.env.DATABASE_URL) {
+    throw new Error("DATABASE_URL is required in Render environment variables.");
+  }
+
+  const sql = postgres(process.env.DATABASE_URL, { prepare: false });
   const workerPayout = calculateWorkerPayout(item.externalPayoutPer1k, item.sourcePlatform);
   const remainingBudget = (item.budgetUsd * item.budgetPctRemaining) / 100;
+  const description = `${item.description || ""}\n\nSource: ${item.sourcePlatform}\nSource URL: ${item.externalUrl}\nNiche: ${item.niche || "general"}\nBudget remaining: ${item.budgetPctRemaining}%\nApproval rate: ${item.approvalRatePct}%\nRules:\n${(item.rules || []).join("\n")}`;
 
-  return {
-    title: item.title,
-    description: `${item.description || ""}\n\nSource: ${item.sourcePlatform}\nSource URL: ${item.externalUrl}\nNiche: ${item.niche || "general"}\nBudget remaining: ${item.budgetPctRemaining}%\nApproval rate: ${item.approvalRatePct}%\nRules:\n${(item.rules || []).join("\n")}`,
-    platform: item.platform || "youtube",
-    status: "active" as const,
-    budgetUsd: item.budgetUsd.toFixed(2),
-    remainingBudgetUsd: remainingBudget.toFixed(2),
-    buyerCpmUsd: item.externalPayoutPer1k.toFixed(4),
-    workerCpmUsd: workerPayout.toFixed(4),
-    requiredHashtags: item.requiredHashtags || [],
-    rules: item.rules || [],
-    landingUrl: item.externalUrl,
-  };
+  try {
+    await sql`
+      insert into campaigns (
+        title,
+        description,
+        platform,
+        status,
+        budget_usd,
+        remaining_budget_usd,
+        buyer_cpm_usd,
+        worker_cpm_usd
+      )
+      values (
+        ${item.title},
+        ${description},
+        ${item.platform || "youtube"},
+        'active',
+        ${item.budgetUsd.toFixed(2)},
+        ${remainingBudget.toFixed(2)},
+        ${item.externalPayoutPer1k.toFixed(4)},
+        ${workerPayout.toFixed(4)}
+      )
+    `;
+  } finally {
+    await sql.end({ timeout: 1 });
+  }
 }
 
 async function importOne(item: ImportedCampaignInput) {
@@ -148,12 +168,12 @@ async function importOne(item: ImportedCampaignInput) {
     };
   } catch (error) {
     const fullError = error instanceof Error ? error.message : "Full import failed.";
-    await db.insert(campaigns).values(buildBasicCampaignValues(item));
+    await rawBasicCampaignInsert(item);
     return {
       imported: true,
       title: item.title,
       sourcePlatform: item.sourcePlatform,
-      reason: `Imported with basic fields. ${sourceWarning} Full import skipped: ${fullError}`,
+      reason: `Imported with emergency basic SQL. ${sourceWarning} Full import skipped: ${fullError}`,
     };
   }
 }
