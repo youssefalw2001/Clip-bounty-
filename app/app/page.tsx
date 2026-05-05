@@ -37,6 +37,12 @@ const adminActions = [
     cta: "Import",
   },
   {
+    title: "Source submission queue",
+    description: "Copy worker clip links, submit them into Whop/Reach.cat, and track source status.",
+    href: "/admin/source-submissions",
+    cta: "Open queue",
+  },
+  {
     title: "Review clips",
     description: "Approve or reject worker submissions before payout.",
     href: "/admin/clips",
@@ -80,7 +86,7 @@ export default function AppHomePage() {
     >
       <ProfileStatusCard />
       <ActionGrid title="Worker app" subtitle="The simple worker flow: profile, campaigns, submit, earnings." items={workerActions} />
-      <ActionGrid title="Admin tools" subtitle="Use these only when importing campaigns, reviewing clips, or paying workers." items={adminActions} />
+      <ActionGrid title="Admin tools" subtitle="Use these when importing campaigns, submitting worker clips to the source platform, reviewing clips, or paying workers." items={adminActions} />
     </DashboardShell>
   );
 }
