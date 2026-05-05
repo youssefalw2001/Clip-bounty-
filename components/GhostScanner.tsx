@@ -18,6 +18,27 @@ type GhostScanResult = {
   safety: string;
 };
 
+type RecoveryPlan = {
+  wallet: string;
+  generatedAt: string;
+  mode: string;
+  totalAccountsScanned: number;
+  accountsToClose: number;
+  reclaimableSol: number;
+  feeBps: number;
+  feeSol: number;
+  userReceivesSol: number;
+  signingStatus: string;
+  nextStep: string;
+  safety: string;
+  accounts: Array<{
+    address: string;
+    mint: string;
+    programId: string;
+    reclaimableSol: number;
+  }>;
+};
+
 type SolanaProvider = {
   isPhantom?: boolean;
   isSolflare?: boolean;
@@ -48,8 +69,11 @@ export function GhostScanner() {
   const [walletSource, setWalletSource] = useState("");
   const [loading, setLoading] = useState(false);
   const [connecting, setConnecting] = useState(false);
+  const [preparing, setPreparing] = useState(false);
   const [result, setResult] = useState<GhostScanResult | null>(null);
+  const [recoveryPlan, setRecoveryPlan] = useState<RecoveryPlan | null>(null);
   const [error, setError] = useState("");
+  const [planError, setPlanError] = useState("");
 
   const feePreview = useMemo(() => {
     if (!result) return 0;
@@ -59,6 +83,8 @@ export function GhostScanner() {
   async function connectWallet() {
     setConnecting(true);
     setError("");
+    setPlanError("");
+    setRecoveryPlan(null);
 
     try {
       const provider = window.solana || window.solflare;
@@ -83,7 +109,9 @@ export function GhostScanner() {
     const targetWallet = (walletOverride || wallet).trim();
     setLoading(true);
     setError("");
+    setPlanError("");
     setResult(null);
+    setRecoveryPlan(null);
 
     try {
       const res = await fetch("/api/ghost/scan", {
@@ -100,6 +128,30 @@ export function GhostScanner() {
       setError(err instanceof Error ? err.message : "Scan failed");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function prepareRecovery() {
+    const targetWallet = wallet.trim();
+    setPreparing(true);
+    setPlanError("");
+    setRecoveryPlan(null);
+
+    try {
+      const res = await fetch("/api/ghost/recovery-plan", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ wallet: targetWallet }),
+      });
+      const data = await res.json();
+
+      if (!res.ok) throw new Error(data.error || "Could not prepare recovery plan");
+
+      setRecoveryPlan(data);
+    } catch (err) {
+      setPlanError(err instanceof Error ? err.message : "Could not prepare recovery plan");
+    } finally {
+      setPreparing(false);
     }
   }
 
@@ -179,12 +231,21 @@ export function GhostScanner() {
           </div>
 
           <div className="border-t border-white/10 p-5 md:p-6">
-            <div className="mb-4 flex items-center justify-between gap-4">
-              <h3 className="text-xl font-black text-white">Empty token accounts</h3>
-              <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-bold text-stone-300">
-                showing {result.accounts.length}
-              </span>
+            <div className="mb-4 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+              <div>
+                <h3 className="text-xl font-black text-white">Empty token accounts</h3>
+                <p className="mt-1 text-xs text-stone-500">Review the accounts before preparing recovery.</p>
+              </div>
+              <button
+                type="button"
+                onClick={prepareRecovery}
+                disabled={preparing || result.emptyTokenAccounts === 0}
+                className="rounded-2xl bg-emerald-300 px-5 py-3 text-sm font-black uppercase tracking-widest text-black disabled:opacity-50"
+              >
+                {preparing ? "Preparing..." : "Prepare recovery"}
+              </button>
             </div>
+            {planError ? <p className="mb-4 rounded-2xl border border-red-300/20 bg-red-300/10 p-4 text-sm font-bold text-red-100">{planError}</p> : null}
             <div className="space-y-3">
               {result.accounts.length === 0 ? (
                 <p className="rounded-2xl border border-white/10 bg-black/30 p-4 text-sm text-stone-300">
@@ -203,6 +264,38 @@ export function GhostScanner() {
                 </div>
               ))}
             </div>
+          </div>
+        </section>
+      ) : null}
+
+      {recoveryPlan ? (
+        <section className="rounded-[2rem] border border-amber-300/20 bg-amber-300/10 p-5 text-amber-100 shadow-2xl shadow-black/25 md:p-6">
+          <p className="text-xs font-black uppercase tracking-[0.24em] text-amber-200">Recovery plan prepared</p>
+          <h2 className="mt-3 text-3xl font-black text-white">Ready to recover {formatSol(recoveryPlan.reclaimableSol)} SOL</h2>
+          <p className="mt-3 text-sm leading-6">
+            GhostWallet found {recoveryPlan.accountsToClose} token accounts that can be closed after user approval. This build does not sign or send the transaction yet.
+          </p>
+
+          <div className="mt-5 grid gap-4 md:grid-cols-3">
+            <div className="rounded-3xl border border-white/10 bg-black/30 p-5">
+              <p className="text-xs font-black uppercase tracking-widest text-stone-500">User receives</p>
+              <p className="mt-2 text-3xl font-black text-white">{formatSol(recoveryPlan.userReceivesSol)} SOL</p>
+            </div>
+            <div className="rounded-3xl border border-white/10 bg-black/30 p-5">
+              <p className="text-xs font-black uppercase tracking-widest text-stone-500">Ghost fee</p>
+              <p className="mt-2 text-3xl font-black text-white">{formatSol(recoveryPlan.feeSol)} SOL</p>
+              <p className="mt-1 text-xs text-stone-500">{recoveryPlan.feeBps / 100}% preview</p>
+            </div>
+            <div className="rounded-3xl border border-white/10 bg-black/30 p-5">
+              <p className="text-xs font-black uppercase tracking-widest text-stone-500">Signing</p>
+              <p className="mt-2 text-2xl font-black text-white">Disabled</p>
+              <p className="mt-1 text-xs text-stone-500">Next build enables wallet-signed recovery.</p>
+            </div>
+          </div>
+
+          <div className="mt-5 rounded-2xl border border-white/10 bg-black/30 p-4">
+            <p className="text-sm font-bold text-white">Safety check</p>
+            <p className="mt-2 text-sm leading-6 text-amber-100/80">{recoveryPlan.safety}</p>
           </div>
         </section>
       ) : null}
