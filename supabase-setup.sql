@@ -171,6 +171,11 @@ create table if not exists clips (
   estimated_earnings_usd numeric(10,4) not null default 0,
   fraud_score integer not null default 0,
   fraud_reasons jsonb default '[]'::jsonb,
+  source_submission_status text not null default 'needs_submission',
+  source_submitted_at timestamp,
+  source_reviewed_at timestamp,
+  source_external_submission_id text,
+  source_submission_notes text,
   submitted_at timestamp not null default now(),
   reviewed_at timestamp,
   last_tracked_at timestamp
@@ -183,11 +188,17 @@ alter table clips add column if not exists payable_views integer not null defaul
 alter table clips add column if not exists estimated_earnings_usd numeric(10,4) not null default 0;
 alter table clips add column if not exists fraud_score integer not null default 0;
 alter table clips add column if not exists fraud_reasons jsonb default '[]'::jsonb;
+alter table clips add column if not exists source_submission_status text not null default 'needs_submission';
+alter table clips add column if not exists source_submitted_at timestamp;
+alter table clips add column if not exists source_reviewed_at timestamp;
+alter table clips add column if not exists source_external_submission_id text;
+alter table clips add column if not exists source_submission_notes text;
 alter table clips add column if not exists submitted_at timestamp not null default now();
 alter table clips add column if not exists reviewed_at timestamp;
 alter table clips add column if not exists last_tracked_at timestamp;
 create index if not exists clips_campaign_idx on clips(campaign_id);
 create index if not exists clips_worker_idx on clips(worker_id);
+create index if not exists clips_source_submission_idx on clips(source_submission_status);
 create unique index if not exists clips_url_idx on clips(url);
 
 create table if not exists view_snapshots (
