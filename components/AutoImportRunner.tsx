@@ -2,15 +2,24 @@
 
 import { useState } from "react";
 
+type ImportResult = {
+  imported?: boolean;
+  title?: string;
+  sourcePlatform?: string;
+  reason?: string;
+};
+
 export function AutoImportRunner() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [results, setResults] = useState<ImportResult[]>([]);
 
   async function runImport() {
     setLoading(true);
     setMessage("");
     setError("");
+    setResults([]);
 
     try {
       const res = await fetch("/api/import-campaigns?secret=clipbounty123secret", {
@@ -22,7 +31,13 @@ export function AutoImportRunner() {
         throw new Error(data.error || "Import failed");
       }
 
-      setMessage(`Imported ${data.importedCount || 0} campaign(s). Open Worker Rewards to view them.`);
+      setResults(data.results || []);
+      const importedCount = data.importedCount || 0;
+      setMessage(
+        importedCount > 0
+          ? `Imported ${importedCount} campaign(s). Open Worker Rewards to view them.`
+          : "Imported 0 new campaigns. Check the details below — it may already exist, fail filters, or need the latest Supabase SQL.",
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Import failed");
     } finally {
@@ -46,6 +61,16 @@ export function AutoImportRunner() {
       </button>
       {message ? <p className="mt-3 text-sm font-semibold text-emerald-100">{message}</p> : null}
       {error ? <p className="mt-3 text-sm font-semibold text-red-200">{error}</p> : null}
+      {results.length ? (
+        <div className="mt-4 space-y-2">
+          {results.map((result, index) => (
+            <div key={`${result.title || "result"}-${index}`} className="rounded-2xl border border-white/10 bg-black/30 p-3 text-sm text-stone-200">
+              <p className="font-bold">{result.imported ? "Imported" : "Not imported"}: {result.title || "Untitled campaign"}</p>
+              <p className="mt-1 text-stone-400">{result.reason || result.sourcePlatform || "No reason returned"}</p>
+            </div>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }
