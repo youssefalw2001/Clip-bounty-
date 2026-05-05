@@ -107,12 +107,18 @@ export const clips = pgTable("clips", {
   estimatedEarningsUsd: numeric("estimated_earnings_usd", { precision: 10, scale: 4 }).notNull().default("0"),
   fraudScore: integer("fraud_score").notNull().default(0),
   fraudReasons: jsonb("fraud_reasons").$type<string[]>().default([]),
+  sourceSubmissionStatus: text("source_submission_status").notNull().default("needs_submission"),
+  sourceSubmittedAt: timestamp("source_submitted_at"),
+  sourceReviewedAt: timestamp("source_reviewed_at"),
+  sourceExternalSubmissionId: text("source_external_submission_id"),
+  sourceSubmissionNotes: text("source_submission_notes"),
   submittedAt: timestamp("submitted_at").notNull().defaultNow(),
   reviewedAt: timestamp("reviewed_at"),
   lastTrackedAt: timestamp("last_tracked_at"),
 }, (table) => ({
   campaignIdx: index("clips_campaign_idx").on(table.campaignId),
   workerIdx: index("clips_worker_idx").on(table.workerId),
+  sourceSubmissionIdx: index("clips_source_submission_idx").on(table.sourceSubmissionStatus),
   uniqueClipUrl: uniqueIndex("clips_url_idx").on(table.url),
 }));
 
