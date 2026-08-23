@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { motion } from 'motion/react'
 import { Button } from '@/components/ui/Button'
 import { Bloom } from '@/components/ui/Texture'
@@ -9,32 +9,56 @@ import { useGame } from '@/store/game'
 import { useFlash } from '@/components/fx/Flash'
 
 export function Lobby() {
-  const { roomCode, opponentName, opponentArrives, dealPrompt, reset } = useGame()
-  const [arrived, setArrived] = useState(false)
+  const {
+    mode,
+    roomCode,
+    opponentName,
+    playerName,
+    isHost,
+    opponentArrives,
+    dealPrompt,
+    reset,
+  } = useGame()
+
+  const online = mode === 'online'
+  // online: a real opponent is present once the server gives them a name
+  const rivalHere = online ? opponentName !== 'WAITING' && opponentName !== '' : undefined
+  const [soloReady, setSoloReady] = useState(false)
+  const arrived = online ? !!rivalHere : soloReady
+
   const [copied, setCopied] = useState(false)
   const flash = useFlash()
+  const announced = useRef(false)
 
-  // Simulated opponent join. In a real build this is a socket event —
-  // the phase machine is already shaped for it, so the transport drops in
-  // without touching any screen code.
+  // solo mode simulates the rival turning up
   useEffect(() => {
-    const t = setTimeout(() => {
-      setArrived(true)
-      sfx.join()
-      haptic.double()
-      flash('acid', 0.12)
-    }, 3200)
+    if (online) return
+    const t = setTimeout(() => setSoloReady(true), 3200)
     return () => clearTimeout(t)
-  }, [flash])
+  }, [online])
 
-  const copy = async () => {
+  // celebrate the arrival exactly once, in either mode
+  useEffect(() => {
+    if (!arrived || announced.current) return
+    announced.current = true
+    sfx.join()
+    haptic.double()
+    flash('acid', 0.12)
+  }, [arrived, flash])
+
+  const share = async () => {
+    const text = `Match me. Room code: ${roomCode}`
     try {
-      await navigator.clipboard.writeText(roomCode)
+      if (navigator.share) {
+        await navigator.share({ title: 'MATCH ME', text })
+      } else {
+        await navigator.clipboard.writeText(roomCode)
+      }
       setCopied(true)
       sfx.confirm()
       setTimeout(() => setCopied(false), 1600)
     } catch {
-      sfx.deny()
+      /* user dismissed the share sheet — not an error worth surfacing */
     }
   }
 
@@ -42,9 +66,9 @@ export function Lobby() {
     <div className="relative flex min-h-full flex-col px-6 py-7">
       <Bloom color="cyan" className="top-[10%] left-[-20%] h-[300px] w-[300px]" />
 
-      <div className="flex items-start justify-between">
+      <div className="flex items-start justify-between gap-4">
         <Label index="01" tone="cyan">
-          the room
+          {online ? 'the room' : 'practice'}
         </Label>
         <button
           onClick={() => {
@@ -58,14 +82,15 @@ export function Lobby() {
       </div>
 
       <div className="flex flex-1 flex-col justify-center">
-        {/* room code */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ type: 'spring', stiffness: 300, damping: 24 }}
           className="mb-9 text-center"
         >
-          <Label className="mb-3">read this out to your friend</Label>
+          <Label className="mb-3">
+            {online ? 'send this to your friend' : 'practice room'}
+          </Label>
           <div className="flex justify-center gap-2">
             {roomCode.split('').map((ch, i) => (
               <motion.div
@@ -79,42 +104,55 @@ export function Lobby() {
               </motion.div>
             ))}
           </div>
-          <button
-            onClick={copy}
-            className="font-mono text-faint hover:text-acid mt-4 text-[10px] tracking-[0.2em] transition-colors"
-          >
-            {copied ? 'COPIED' : 'TAP TO COPY'}
-          </button>
+          {online && (
+            <button
+              onClick={share}
+              className="font-mono text-faint hover:text-acid mt-4 text-[10px] tracking-[0.2em] transition-colors"
+            >
+              {copied ? 'COPIED' : 'TAP TO SHARE'}
+            </button>
+          )}
         </motion.div>
 
-        {/* versus */}
         <div className="mb-8 grid grid-cols-[1fr_auto_1fr] items-center gap-3">
-          <PlayerSlot name="YOU" ready tone="acid" />
+          <PlayerSlot name={playerName || 'YOU'} ready tone="acid" />
           <Display chromatic={false} className="text-faint text-2xl">
             vs
           </Display>
-          <PlayerSlot name={arrived ? opponentName : 'WAITING'} ready={arrived} tone="blood" />
+          <PlayerSlot
+            name={arrived ? opponentName || 'RIVAL' : 'WAITING'}
+            ready={arrived}
+            tone="blood"
+          />
         </div>
 
-        <motion.div
-          initial={false}
-          animate={{ opacity: arrived ? 1 : 0.35 }}
-          className="space-y-3"
-        >
-          <Button
-            size="lg"
-            full
-            silent
-            disabled={!arrived}
-            onClick={() => {
-              sfx.confirm()
-              haptic.medium()
-              dealPrompt()
-              opponentArrives()
-            }}
-          >
-            {arrived ? 'Deal the prompt' : 'Waiting for rival…'}
-          </Button>
+        <motion.div initial={false} animate={{ opacity: arrived ? 1 : 0.35 }} className="space-y-3">
+          {online && !isHost ? (
+            <div className="panel border-hairline border-2 px-5 py-4 text-center">
+              <Label tone={arrived ? 'acid' : 'ash'}>
+                {arrived ? 'waiting for the host to deal' : 'connecting…'}
+              </Label>
+            </div>
+          ) : (
+            <Button
+              size="lg"
+              full
+              silent
+              disabled={!arrived}
+              onClick={() => {
+                sfx.confirm()
+                haptic.medium()
+                if (online) {
+                  dealPrompt()
+                } else {
+                  dealPrompt()
+                  opponentArrives()
+                }
+              }}
+            >
+              {arrived ? 'Deal the prompt' : 'Waiting for rival…'}
+            </Button>
+          )}
         </motion.div>
       </div>
 
@@ -164,7 +202,11 @@ function PlayerSlot({
           </>
         )}
       </div>
-      <span className={`font-display text-xs tracking-[0.1em] ${ready ? 'text-bone' : 'text-faint'}`}>
+      <span
+        className={`font-display truncate text-xs tracking-[0.1em] ${
+          ready ? 'text-bone' : 'text-faint'
+        }`}
+      >
         {name}
       </span>
     </div>

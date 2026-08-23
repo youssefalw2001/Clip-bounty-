@@ -8,26 +8,38 @@ import { useGame } from '@/store/game'
 /**
  * 3 · 2 · 1.
  *
- * Each number slams in oversized and settles, rather than fading. The pitch
- * of the tick rises with each count, which is doing most of the tension work
+ * Each number slams in oversized and settles, rather than fading. The pitch of
+ * the tick rises with each count, which is doing most of the tension work
  * without any visual cost.
+ *
+ * Online, the server drives the count so both players are genuinely in sync;
+ * solo runs it locally.
  */
 export function Countdown() {
-  const beginRound = useGame((s) => s.beginRound)
-  const [n, setN] = useState(3)
+  const { mode, countdownN, beginRound } = useGame()
+  const online = mode === 'online'
+  const [localN, setLocalN] = useState(3)
+  const n = online ? countdownN : localN
   const shake = useShake()
 
+  // solo only: advance the count ourselves
   useEffect(() => {
-    if (n === 0) {
+    if (online) return
+    if (localN <= 0) {
       const t = setTimeout(beginRound, 260)
       return () => clearTimeout(t)
     }
+    const t = setTimeout(() => setLocalN((v) => v - 1), 620)
+    return () => clearTimeout(t)
+  }, [online, localN, beginRound])
+
+  // juice fires off whichever count is authoritative
+  useEffect(() => {
+    if (n <= 0) return
     sfx.tick(3 - n)
     haptic.medium()
     shake(4)
-    const t = setTimeout(() => setN((v) => v - 1), 620)
-    return () => clearTimeout(t)
-  }, [n, beginRound, shake])
+  }, [n, shake])
 
   return (
     <div className="relative flex min-h-full flex-col items-center justify-center">

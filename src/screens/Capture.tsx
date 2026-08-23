@@ -11,7 +11,7 @@ import { useGame } from '@/store/game'
 const LIMIT = 15
 
 export function Capture() {
-  const { prompt, setMyPhoto, stakeOpponent } = useGame()
+  const { prompt, setMyPhoto, commitStake } = useGame()
   const facing = prompt?.facing ?? 'front'
   const { videoRef, status, start, capture } = useCamera(facing)
   const shake = useShake()
@@ -38,13 +38,14 @@ export function Capture() {
       setShot(img)
       setMyPhoto(img)
 
-      // beat, then hand off — lets the "STAKED" stamp land
+      // beat, then commit — lets the "STAKED" stamp land.
+      // online: this sends a flag only; the photo stays on this device.
       setTimeout(() => {
         sfx.confirm()
-        stakeOpponent()
+        commitStake()
       }, 1500)
     },
-    [capture, flash, shake, setMyPhoto, stakeOpponent],
+    [capture, flash, shake, setMyPhoto, commitStake],
   )
 
   // countdown → forced capture at zero. the timer is the point: a rushed

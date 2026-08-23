@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { motion } from 'motion/react'
 import { Display, Label } from '@/components/ui/Type'
 import { ArrowRight } from '@/components/ui/Icon'
@@ -17,20 +17,19 @@ import { useGame } from '@/store/game'
  * The reveal option is deliberately the slower, heavier one to pick.
  */
 export function Choice() {
-  const { matchLoser, forfeit, choose } = useGame()
+  const { matchLoser, forfeit, choose, mode } = useGame()
   const iLost = matchLoser === 'me'
-  const [rivalThinking, setRivalThinking] = useState(iLost ? false : true)
 
-  // when the rival lost, they take a beat before deciding
+  // Solo only: the bot takes a beat and then opens up. Online, we simply wait
+  // for the real loser's decision to arrive over the wire.
   useEffect(() => {
-    if (!rivalThinking) return
+    if (iLost || mode === 'online') return
     const t = setTimeout(() => {
-      setRivalThinking(false)
       sfx.confirm()
       choose('reveal')
     }, 2800)
     return () => clearTimeout(t)
-  }, [rivalThinking, choose])
+  }, [iLost, mode, choose])
 
   if (!iLost) {
     return (

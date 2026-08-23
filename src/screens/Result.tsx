@@ -104,8 +104,9 @@ export function Result() {
         </motion.div>
 
         <p className="font-mono text-faint mt-7 text-[10px] leading-relaxed tracking-wide">
-          BOTH STAKES HAVE BEEN DISCARDED FROM MEMORY. NOTHING WAS UPLOADED,
-          NOTHING WAS STORED.
+          {forfeited
+            ? 'NEITHER PHOTO WAS EVER SENT. BOTH HAVE BEEN DISCARDED.'
+            : 'THE WINNING PHOTO WAS NEVER SENT. THE REVEALED ONE WAS RELAYED ONCE AND NOT STORED.'}
         </p>
       </div>
 

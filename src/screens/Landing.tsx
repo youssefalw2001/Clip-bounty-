@@ -19,12 +19,7 @@ function DropIn({ text, className }: { text: string; className?: string }) {
           className="inline-block"
           initial={{ y: '-120%', opacity: 0, rotate: -12 }}
           animate={{ y: 0, opacity: 1, rotate: 0 }}
-          transition={{
-            type: 'spring',
-            stiffness: 420,
-            damping: 18,
-            delay: 0.1 + i * 0.045,
-          }}
+          transition={{ type: 'spring', stiffness: 420, damping: 18, delay: 0.1 + i * 0.045 }}
         >
           {ch}
         </motion.span>
@@ -34,11 +29,19 @@ function DropIn({ text, className }: { text: string; className?: string }) {
 }
 
 export function Landing() {
-  const createRoom = useGame((s) => s.createRoom)
-  const joinRoom = useGame((s) => s.joinRoom)
-  const [joining, setJoining] = useState(false)
-  const [code, setCode] = useState('')
+  const {
+    playerName,
+    setPlayerName,
+    createRoom,
+    createOnlineRoom,
+    joinOnlineRoom,
+    joining,
+    netError,
+    clearNetError,
+  } = useGame()
 
+  const [view, setView] = useState<'menu' | 'join'>('menu')
+  const [code, setCode] = useState('')
   const canJoin = code.trim().length === 4
 
   return (
@@ -49,7 +52,6 @@ export function Landing() {
       <Marquee items={TICKER} tone="acid" />
 
       <div className="relative flex flex-1 flex-col justify-center px-6 py-8">
-        {/* chrome row */}
         <motion.div
           className="absolute top-5 right-6 left-6 flex items-start justify-between"
           initial={{ opacity: 0 }}
@@ -88,7 +90,7 @@ export function Landing() {
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.6 }}
-          className="mb-7"
+          className="mb-6"
         >
           <Sticker rotate={-6} tone="blood">
             two friends · one loser
@@ -101,25 +103,49 @@ export function Landing() {
 
         {/* actions */}
         <motion.div
-          className="space-y-3"
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.72, type: 'spring', stiffness: 260, damping: 24 }}
+          className="space-y-3"
         >
-          {!joining ? (
+          {netError && (
+            <motion.div
+              initial={{ opacity: 0, y: -6 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="border-blood bg-blood/10 border-2 px-4 py-2.5"
+            >
+              <p className="font-mono text-blood text-[11px] tracking-wide">
+                {netError.toUpperCase()}
+              </p>
+            </motion.div>
+          )}
+
+          {view === 'menu' ? (
             <>
+              <div>
+                <Label className="mb-2">what should we call you</Label>
+                <input
+                  value={playerName}
+                  onChange={(e) => setPlayerName(e.target.value)}
+                  placeholder="YOUR NAME"
+                  maxLength={14}
+                  className="font-mono border-hairline focus:border-acid bg-surface text-bone placeholder:text-faint w-full border-2 px-4 py-3 text-center text-lg tracking-[0.2em] uppercase outline-none transition-colors"
+                />
+              </div>
+
               <Button
                 size="lg"
                 full
                 silent
+                disabled={joining}
                 onClick={() => {
                   unlockAudio()
                   sfx.confirm()
                   haptic.medium()
-                  createRoom()
+                  void createOnlineRoom()
                 }}
               >
-                Create a room
+                {joining ? 'Opening…' : 'Create a room'}
               </Button>
               <Button
                 variant="ghost"
@@ -127,11 +153,22 @@ export function Landing() {
                 full
                 onClick={() => {
                   unlockAudio()
-                  setJoining(true)
+                  clearNetError()
+                  setView('join')
                 }}
               >
                 I have a code
               </Button>
+              <button
+                onClick={() => {
+                  unlockAudio()
+                  sfx.select()
+                  createRoom()
+                }}
+                className="font-mono text-faint hover:text-acid w-full pt-1 text-[10px] tracking-[0.2em] transition-colors"
+              >
+                OR PRACTISE AGAINST THE BOT →
+              </button>
             </>
           ) : (
             <div className="space-y-3">
@@ -142,7 +179,10 @@ export function Landing() {
                 autoFocus
                 value={code}
                 onChange={(e) => {
-                  const next = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4)
+                  const next = e.target.value
+                    .toUpperCase()
+                    .replace(/[^A-Z0-9]/g, '')
+                    .slice(0, 4)
                   if (next.length > code.length) sfx.tick(next.length)
                   setCode(next)
                 }}
@@ -154,22 +194,23 @@ export function Landing() {
                 size="lg"
                 full
                 silent
-                disabled={!canJoin}
+                disabled={!canJoin || joining}
                 onClick={() => {
                   sfx.join()
                   haptic.medium()
-                  joinRoom(code)
+                  void joinOnlineRoom(code)
                 }}
               >
-                Join match
+                {joining ? 'Joining…' : 'Join match'}
               </Button>
               <Button
                 variant="ghost"
                 size="sm"
                 full
                 onClick={() => {
-                  setJoining(false)
+                  setView('menu')
                   setCode('')
+                  clearNetError()
                 }}
               >
                 Back
@@ -178,15 +219,14 @@ export function Landing() {
           )}
         </motion.div>
 
-        {/* the honest footer. worth being upfront rather than burying it. */}
         <motion.p
-          className="font-mono text-faint mt-8 text-[10px] leading-relaxed tracking-wide"
+          className="font-mono text-faint mt-7 text-[10px] leading-relaxed tracking-wide"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 1 }}
         >
-          PHOTOS ARE TAKEN IN-APP ONLY — NO GALLERY ACCESS. THEY NEVER LEAVE YOUR
-          DEVICE IN THIS BUILD, AND BURN WHEN THE MATCH ENDS. 18+.
+          PHOTOS ARE TAKEN IN-APP ONLY — NO GALLERY ACCESS. YOUR PHOTO ONLY EVER
+          LEAVES THIS DEVICE IF YOU LOSE AND CHOOSE TO REVEAL IT. 18+.
         </motion.p>
       </div>
 

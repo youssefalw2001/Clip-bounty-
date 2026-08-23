@@ -9,13 +9,13 @@ import { sfx, haptic } from '@/lib/audio'
 import { useGame } from '@/store/game'
 
 const DURATION = 3800
-/** Quantising the wipe into bands makes it read as *decrypting* rather than
- *  as a CSS transition. A smooth linear unblur looks like a loading state;
- *  chunky bands look like something is being forced open. */
+/** Quantising the wipe into bands makes it read as *decrypting* rather than as
+ *  a CSS transition. A smooth linear unblur looks like a loading state; chunky
+ *  bands look like something being forced open. */
 const BANDS = 26
 
 export function Reveal() {
-  const { matchLoser, myPhoto, theirPhoto, setPhase, prompt } = useGame()
+  const { matchLoser, myPhoto, theirPhoto, setPhase, prompt, mode, sendReveal } = useGame()
   const iLost = matchLoser === 'me'
   const photo = iLost ? myPhoto : theirPhoto
 
@@ -25,8 +25,20 @@ export function Reveal() {
   const [p, setP] = useState(0)
   const [done, setDone] = useState(false)
   const bandRef = useRef(-1)
+  const sent = useRef(false)
 
+  // Loser side, online: this is the single moment the photo crosses the network.
+  // It happens only here — after losing and after explicitly choosing to reveal.
   useEffect(() => {
+    if (mode !== 'online' || !iLost || sent.current) return
+    sent.current = true
+    sendReveal()
+  }, [mode, iLost, sendReveal])
+
+  // Winner side waits for the bytes to land before the theatre starts.
+  useEffect(() => {
+    if (!photo) return
+
     sfx.reveal(DURATION / 1000)
     sfx.riser(DURATION / 1000)
 
@@ -35,7 +47,7 @@ export function Reveal() {
 
     const tick = (now: number) => {
       const t = Math.min(1, (now - start) / DURATION)
-      // ease-in: slow, agonising start, then it rips open
+      // ease-in-out: slow, agonising start, then it rips open
       const eased = t * t * (3 - 2 * t)
       setP(eased)
 
@@ -61,25 +73,38 @@ export function Reveal() {
 
     raf = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(raf)
-  }, [shake, flash])
+  }, [photo, shake, flash])
 
   const banded = Math.ceil(p * BANDS) / BANDS
   const hidden = (1 - banded) * 100
+  const waiting = !photo
 
   return (
     <div className="relative flex min-h-full flex-col px-5 py-6">
-      <div className="mb-4 flex items-start justify-between">
+      <div className="mb-4 flex items-start justify-between gap-4">
         <Label index="08" tone="blood">
           {iLost ? 'your stake' : 'their stake'}
         </Label>
-        <div className="font-mono text-blood text-2xl font-extrabold tabular-nums">
-          {String(Math.floor(p * 100)).padStart(3, '0')}%
+        <div className="font-mono text-blood text-2xl leading-none font-extrabold tabular-nums">
+          {waiting ? '···' : `${String(Math.floor(p * 100)).padStart(3, '0')}%`}
         </div>
       </div>
 
       <div className="relative flex flex-1 items-center justify-center">
         <div className="relative aspect-[3/4] w-full max-w-[330px] overflow-hidden">
-          {photo ? (
+          {waiting ? (
+            <div className="panel border-hairline flex h-full flex-col items-center justify-center border-2 px-6 text-center">
+              <motion.div
+                animate={{ rotate: 360 }}
+                transition={{ duration: 1.2, repeat: Infinity, ease: 'linear' }}
+                className="border-blood mb-5 h-8 w-8 border-2 border-t-transparent"
+              />
+              <Label tone="blood">receiving their stake</Label>
+              <p className="text-faint mt-3 max-w-[26ch] text-[11px] leading-snug">
+                It is being sent now. Until this moment it never left their phone.
+              </p>
+            </div>
+          ) : (
             <>
               {/* blurred base — always present underneath */}
               <img
@@ -113,19 +138,12 @@ export function Reveal() {
                 />
               )}
 
-              {/* scanlines fade as it resolves */}
               <div
                 className="scanlines pointer-events-none absolute inset-0"
                 style={{ opacity: 0.55 * (1 - p) }}
               />
-
-              {/* frame */}
               <div className="border-blood/50 pointer-events-none absolute inset-0 border-2" />
             </>
-          ) : (
-            <div className="panel flex h-full items-center justify-center">
-              <Label>no stake found</Label>
-            </div>
           )}
 
           <AnimatePresence>
@@ -162,7 +180,15 @@ export function Reveal() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ type: 'spring', stiffness: 300, damping: 24 }}
             >
-              <Button size="lg" full silent onClick={() => { sfx.tap(); setPhase('result') }}>
+              <Button
+                size="lg"
+                full
+                silent
+                onClick={() => {
+                  sfx.tap()
+                  setPhase('result')
+                }}
+              >
                 {iLost ? 'Take it on the chin' : 'Nice'}
               </Button>
             </motion.div>
@@ -172,7 +198,7 @@ export function Reveal() {
                 animate={{ opacity: [0.4, 1, 0.4] }}
                 transition={{ duration: 0.9, repeat: Infinity }}
               >
-                <Label tone="blood">opening</Label>
+                <Label tone="blood">{waiting ? 'standby' : 'opening'}</Label>
               </motion.div>
             </div>
           )}

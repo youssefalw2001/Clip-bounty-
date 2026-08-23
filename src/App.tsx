@@ -3,7 +3,10 @@ import { AnimatePresence, motion } from 'motion/react'
 import { Grain, Backdrop } from '@/components/ui/Texture'
 import { ShakeProvider } from '@/components/fx/Shake'
 import { FlashProvider } from '@/components/fx/Flash'
+import { Button } from '@/components/ui/Button'
+import { Display, Label } from '@/components/ui/Type'
 import { unlockAudio } from '@/lib/audio'
+import { track } from '@/lib/analytics'
 import { useGame, type Phase } from '@/store/game'
 
 import { Landing } from '@/screens/Landing'
@@ -37,7 +40,14 @@ const NO_SLIDE: Phase[] = ['countdown', 'round', 'reveal']
 
 export default function App() {
   const phase = useGame((s) => s.phase)
+  const opponentLeft = useGame((s) => s.opponentLeft)
+  const mode = useGame((s) => s.mode)
+  const reset = useGame((s) => s.reset)
   const Screen = SCREENS[phase]
+
+  useEffect(() => {
+    track('app_opened')
+  }, [])
 
   // browsers require a gesture before audio can start; catch the first one
   // anywhere so sound is live from the very first interaction onward
@@ -52,6 +62,7 @@ export default function App() {
   }, [])
 
   const slide = !NO_SLIDE.includes(phase)
+  const showAbandoned = opponentLeft && mode === 'online' && phase !== 'landing'
 
   return (
     <ShakeProvider>
@@ -59,7 +70,7 @@ export default function App() {
         <Grain />
         <div className="relative flex h-full w-full items-stretch justify-center">
           {/* phone-shaped stage. on desktop it reads as an app, not a webpage. */}
-          <div className="bg-ink relative h-full w-full max-w-[440px] overflow-hidden sm:border-x sm:border-hairline">
+          <div className="bg-ink sm:border-hairline relative h-full w-full max-w-[440px] overflow-hidden sm:border-x">
             <Backdrop />
             <div className="relative h-full">
               <AnimatePresence mode="wait">
@@ -77,6 +88,34 @@ export default function App() {
                 </motion.div>
               </AnimatePresence>
             </div>
+
+            {/* A dropped opponent has to be terminal rather than a soft warning:
+                the match can't be resolved, and leaving it ambiguous is how you
+                end up with someone's stake in limbo. */}
+            <AnimatePresence>
+              {showAbandoned && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="bg-ink/95 absolute inset-0 z-50 flex flex-col items-center justify-center px-8 text-center backdrop-blur-sm"
+                >
+                  <Display className="chromatic text-blood mb-4 text-[16vw] sm:text-[64px]">
+                    they bailed
+                  </Display>
+                  <p className="text-ash mb-8 max-w-[28ch] text-[14px] leading-snug">
+                    Your rival left the room, so this match can&apos;t be settled. Both
+                    stakes are discarded — nothing was revealed.
+                  </p>
+                  <div className="w-full max-w-[260px]">
+                    <Button size="lg" full onClick={reset}>
+                      Back to start
+                    </Button>
+                  </div>
+                  <Label className="mt-6">no photos were sent</Label>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         </div>
       </FlashProvider>

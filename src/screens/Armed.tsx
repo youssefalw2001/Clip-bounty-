@@ -14,7 +14,8 @@ import { useGame } from '@/store/game'
  * it exists purely to build dread, which is the product.
  */
 export function Armed() {
-  const { beginCountdown, prompt } = useGame()
+  const { beginCountdown, prompt, mode, isHost, opponentName, playerName } = useGame()
+  const canStart = mode !== 'online' || isHost
 
   // slow heartbeat under the pot
   useEffect(() => {
@@ -44,7 +45,7 @@ export function Armed() {
 
         {/* face-down stakes */}
         <div className="mb-9 flex items-center justify-center gap-4">
-          {(['YOU', 'RIVAL'] as const).map((who, i) => (
+          {[playerName || 'YOU', opponentName || 'RIVAL'].map((who, i) => (
             <motion.div
               key={who}
               initial={{ y: 60, opacity: 0, rotate: i === 0 ? -14 : 14 }}
@@ -59,7 +60,9 @@ export function Armed() {
             >
               <div className="scanlines absolute inset-0 opacity-40" />
               <span className="font-display text-faint mb-1 text-5xl">?</span>
-              <span className="font-mono text-faint text-[9px] tracking-[0.2em]">{who}</span>
+              <span className="font-mono text-faint max-w-full truncate px-2 text-[9px] tracking-[0.2em]">
+                {who.toUpperCase()}
+              </span>
               <div className="absolute inset-x-0 bottom-0 h-1 bg-blood/60" />
             </motion.div>
           ))}
@@ -85,19 +88,25 @@ export function Armed() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.72, type: 'spring', stiffness: 280, damping: 24 }}
         >
-          <Button
-            size="xl"
-            full
-            variant="danger"
-            silent
-            onClick={() => {
-              sfx.riser(1.2)
-              haptic.double()
-              beginCountdown()
-            }}
-          >
-            Fight
-          </Button>
+          {canStart ? (
+            <Button
+              size="xl"
+              full
+              variant="danger"
+              silent
+              onClick={() => {
+                sfx.riser(1.2)
+                haptic.double()
+                beginCountdown()
+              }}
+            >
+              Fight
+            </Button>
+          ) : (
+            <div className="panel border-blood/50 border-2 px-5 py-5 text-center">
+              <Label tone="blood">waiting for the host to start</Label>
+            </div>
+          )}
         </motion.div>
       </div>
     </div>

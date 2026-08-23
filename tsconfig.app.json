@@ -6,6 +6,9 @@
     "module": "esnext",
     "types": ["vite/client"],
     "allowArbitraryExtensions": true,
+    /* the canonical prompt deck is plain ESM so the Node server can
+       import it too — see src/shared/deck.js */
+    "allowJs": true,
     "skipLibCheck": true,
 
     /* Bundler mode */
